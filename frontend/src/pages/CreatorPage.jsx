@@ -7,7 +7,7 @@ import {
 } from 'lucide-react'
 import GlassCard from '../components/GlassCard'
 import NeonButton from '../components/NeonButton'
-import { getCreatorProfile } from '../utils/api'
+import { getCreatorProfile, getAssetUrl } from '../utils/api'
 
 export default function CreatorPage() {
   const { userId } = useParams()
@@ -26,11 +26,7 @@ export default function CreatorPage() {
   const creator = data?.creator
   const projects = data?.projects || []
 
-  const photoSrc = creator?.profile_photo
-    ? (creator.profile_photo.startsWith('http') || creator.profile_photo.startsWith('data:')
-        ? creator.profile_photo
-        : `http://localhost:8000${creator.profile_photo}`)
-    : null
+  const photoSrc = getAssetUrl(creator?.profile_photo)
 
   const initials = (creator?.full_name || 'CAD Creator')
     .split(' ')

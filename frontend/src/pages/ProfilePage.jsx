@@ -10,7 +10,7 @@ import toast from 'react-hot-toast'
 import GlassCard from '../components/GlassCard'
 import NeonButton from '../components/NeonButton'
 import { getUser } from '../utils/auth'
-import { updateProfile, uploadProfilePhoto, fetchMe } from '../utils/api'
+import { updateProfile, uploadProfilePhoto, fetchMe, getAssetUrl } from '../utils/api'
 
 export default function ProfilePage() {
   const fileInputRef = useRef(null)
@@ -139,11 +139,7 @@ export default function ProfilePage() {
     .substring(0, 2)
     .toUpperCase()
 
-  const photoSrc = profilePhoto
-    ? (profilePhoto.startsWith('http') || profilePhoto.startsWith('data:')
-        ? profilePhoto
-        : `http://localhost:8000${profilePhoto}`)
-    : null
+  const photoSrc = getAssetUrl(profilePhoto)
 
   return (
     <div style={{ minHeight: '100vh', background: '#04060f', paddingTop: 96, paddingBottom: 64, position: 'relative' }}>

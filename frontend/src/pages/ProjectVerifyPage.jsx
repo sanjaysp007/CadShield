@@ -8,7 +8,7 @@ import {
 import toast from 'react-hot-toast'
 import GlassCard from '../components/GlassCard'
 import NeonButton from '../components/NeonButton'
-import { verifyProjectById } from '../utils/api'
+import { verifyProjectById, getAssetUrl } from '../utils/api'
 
 export default function ProjectVerifyPage() {
   const [searchParams] = useSearchParams()
@@ -45,11 +45,7 @@ export default function ProjectVerifyPage() {
     }
   }, [searchParams])
 
-  const photoSrc = result?.profile_photo
-    ? (result.profile_photo.startsWith('http') || result.profile_photo.startsWith('data:')
-        ? result.profile_photo
-        : `http://localhost:8000${result.profile_photo}`)
-    : null
+  const photoSrc = getAssetUrl(result?.profile_photo)
 
   const initials = (result?.creator_name || 'Creator')
     .split(' ')

@@ -12,7 +12,7 @@ import {
   LineElement, BarElement, ArcElement, Tooltip, Legend, Filler
 } from 'chart.js'
 import { Line, Doughnut, Bar } from 'react-chartjs-2'
-import { getDashboardStats, getModels, getMyProjects, downloadWatermarkedModel } from '../utils/api'
+import { getDashboardStats, getModels, getMyProjects, downloadWatermarkedModel, getAssetUrl } from '../utils/api'
 import { getUser, logout } from '../utils/auth'
 import { format } from 'date-fns'
 import toast from 'react-hot-toast'
@@ -183,11 +183,7 @@ export default function Dashboard() {
     plugins: { tooltip: TOOLTIP, legend: LEGEND, ...extra },
   })
 
-  const photoSrc = user?.profile_photo
-    ? (user.profile_photo.startsWith('http') || user.profile_photo.startsWith('data:')
-        ? user.profile_photo
-        : `http://localhost:8000${user.profile_photo}`)
-    : null
+  const photoSrc = getAssetUrl(user?.profile_photo)
 
   const initials = (user?.full_name || 'CAD User')
     .split(' ')

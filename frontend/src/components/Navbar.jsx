@@ -7,6 +7,7 @@ import {
   ChevronDown, Copy, Check, User, Settings, ShieldCheck
 } from 'lucide-react'
 import { getUser, logout } from '../utils/auth'
+import { getAssetUrl } from '../utils/api'
 
 const NAV = [
   { to: '/dashboard',      label: 'Dashboard',   icon: LayoutDashboard },
@@ -37,11 +38,7 @@ function UserMenu({ user }) {
     return () => document.removeEventListener('click', close)
   }, [open])
 
-  const photoSrc = user?.profile_photo
-    ? (user.profile_photo.startsWith('http') || user.profile_photo.startsWith('data:')
-        ? user.profile_photo
-        : `http://localhost:8000${user.profile_photo}`)
-    : null
+  const photoSrc = getAssetUrl(user?.profile_photo)
 
   const initials = (user?.full_name || 'CAD User')
     .split(' ')

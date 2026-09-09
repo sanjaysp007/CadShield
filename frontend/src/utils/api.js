@@ -3,7 +3,17 @@ import toast from 'react-hot-toast'
 import { getToken, saveAuth, updateStoredUser, clearAuth, getUser } from './auth'
 import { supabase } from './supabase'
 
-const BASE = 'http://localhost:8000'
+export const API_BASE_URL = (import.meta.env.VITE_API_URL || 'http://localhost:8000').replace(/\/+$/, '')
+const BASE = API_BASE_URL
+
+export function getAssetUrl(path) {
+  if (!path) return null
+  if (path.startsWith('http://') || path.startsWith('https://') || path.startsWith('data:')) {
+    return path
+  }
+  const cleanPath = path.startsWith('/') ? path : `/${path}`
+  return `${API_BASE_URL}${cleanPath}`
+}
 
 const api = axios.create({ baseURL: BASE, timeout: 60000 })
 
