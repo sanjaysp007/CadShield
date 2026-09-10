@@ -17,33 +17,78 @@ import ProjectVerifyPage  from './pages/ProjectVerifyPage'
 import CreatorPage        from './pages/CreatorPage'
 import AdminDashboard     from './pages/AdminDashboard'
 import GlobalSearchPage   from './pages/GlobalSearchPage'
-import { isLoggedIn, isAdmin, initSupabaseSession } from './utils/auth'
+import { isLoggedIn, isAdmin, initSupabaseSession, isSessionReady, waitForSession } from './utils/auth'
 
 // ── Protected route wrapper ───────────────────────────
 function Protected({ children }) {
-  const [auth, setAuth] = useState(() => isLoggedIn())
+  const [ready, setReady] = useState(() => isSessionReady())
+  const [auth, setAuth]   = useState(() => isLoggedIn())
 
   useEffect(() => {
-    const handleAuthUpdate = () => setAuth(isLoggedIn())
-    window.addEventListener('cadshield-user-updated', handleAuthUpdate)
-    return () => window.removeEventListener('cadshield-user-updated', handleAuthUpdate)
+    const handleUpdate = () => {
+      setReady(true)
+      setAuth(isLoggedIn())
+    }
+    window.addEventListener('cadshield-user-updated', handleUpdate)
+    window.addEventListener('cadshield-auth-ready', handleUpdate)
+    waitForSession().then(() => {
+      setReady(true)
+      setAuth(isLoggedIn())
+    })
+    return () => {
+      window.removeEventListener('cadshield-user-updated', handleUpdate)
+      window.removeEventListener('cadshield-auth-ready', handleUpdate)
+    }
   }, [])
+
+  if (!ready) {
+    return (
+      <div style={{ minHeight: '100vh', background: '#04060f', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ width: 40, height: 40, border: '3px solid rgba(0,229,255,0.2)', borderTopColor: '#00e5ff', borderRadius: '50%', animation: 'spin 0.8s linear infinite', margin: '0 auto 16px' }} />
+          <p style={{ color: '#6b7a8d', fontSize: '0.82rem', fontFamily: "'Space Grotesk', sans-serif" }}>Restoring secure session...</p>
+        </div>
+      </div>
+    )
+  }
 
   return auth ? children : <Navigate to="/login" replace />
 }
 
 function AdminProtected({ children }) {
-  const [auth, setAuth] = useState(() => isLoggedIn())
+  const [ready, setReady] = useState(() => isSessionReady())
+  const [auth, setAuth]   = useState(() => isLoggedIn())
   const [admin, setAdmin] = useState(() => isAdmin())
 
   useEffect(() => {
-    const handleAuthUpdate = () => {
+    const handleUpdate = () => {
+      setReady(true)
       setAuth(isLoggedIn())
       setAdmin(isAdmin())
     }
-    window.addEventListener('cadshield-user-updated', handleAuthUpdate)
-    return () => window.removeEventListener('cadshield-user-updated', handleAuthUpdate)
+    window.addEventListener('cadshield-user-updated', handleUpdate)
+    window.addEventListener('cadshield-auth-ready', handleUpdate)
+    waitForSession().then(() => {
+      setReady(true)
+      setAuth(isLoggedIn())
+      setAdmin(isAdmin())
+    })
+    return () => {
+      window.removeEventListener('cadshield-user-updated', handleUpdate)
+      window.removeEventListener('cadshield-auth-ready', handleUpdate)
+    }
   }, [])
+
+  if (!ready) {
+    return (
+      <div style={{ minHeight: '100vh', background: '#04060f', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ width: 40, height: 40, border: '3px solid rgba(0,229,255,0.2)', borderTopColor: '#00e5ff', borderRadius: '50%', animation: 'spin 0.8s linear infinite', margin: '0 auto 16px' }} />
+          <p style={{ color: '#6b7a8d', fontSize: '0.82rem', fontFamily: "'Space Grotesk', sans-serif" }}>Restoring secure session...</p>
+        </div>
+      </div>
+    )
+  }
 
   if (!auth) return <Navigate to="/login" replace />
   if (!admin) return <Navigate to="/dashboard" replace />

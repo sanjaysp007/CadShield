@@ -85,9 +85,10 @@ CREATE INDEX IF NOT EXISTS idx_profiles_user_id ON public.profiles(user_id);
 CREATE INDEX IF NOT EXISTS idx_profiles_role ON public.profiles(role);
 CREATE INDEX IF NOT EXISTS idx_profiles_email ON public.profiles(email);
 
--- 2. Create the 'models' table for 3D CAD files metadata
+-- 2. Create the 'models' table for 3D CAD files metadata with strict user ownership
 CREATE TABLE IF NOT EXISTS public.models (
   id TEXT PRIMARY KEY,
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
   original_filename TEXT,
   file_format TEXT,
@@ -108,9 +109,17 @@ CREATE TABLE IF NOT EXISTS public.models (
   updated_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now())
 );
 
--- Ensure is_public exists if table was already created
+-- Ensure user_id and is_public columns exist if table was already created
+ALTER TABLE public.models ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE;
 ALTER TABLE public.models ADD COLUMN IF NOT EXISTS is_public BOOLEAN DEFAULT false;
 
+-- Backfill user_id on existing models from profiles if null
+UPDATE public.models m
+SET user_id = p.id
+FROM public.profiles p
+WHERE m.user_id IS NULL AND (m.owner_id = p.user_id OR m.owner_id = p.id::text);
+
+CREATE INDEX IF NOT EXISTS idx_models_user_id ON public.models(user_id);
 CREATE INDEX IF NOT EXISTS idx_models_owner_id ON public.models(owner_id);
 CREATE INDEX IF NOT EXISTS idx_models_is_public ON public.models(is_public);
 CREATE INDEX IF NOT EXISTS idx_models_status ON public.models(status);
@@ -248,19 +257,20 @@ DROP POLICY IF EXISTS "Allow authenticated read models" ON public.models;
 DROP POLICY IF EXISTS "Allow authenticated insert models" ON public.models;
 DROP POLICY IF EXISTS "Allow owner or admin update models" ON public.models;
 DROP POLICY IF EXISTS "Allow owner or admin delete models" ON public.models;
+DROP POLICY IF EXISTS "Models select policy" ON public.models;
+DROP POLICY IF EXISTS "Models insert policy" ON public.models;
+DROP POLICY IF EXISTS "Models update policy" ON public.models;
+DROP POLICY IF EXISTS "Models delete policy" ON public.models;
 
 DROP POLICY IF EXISTS "Allow authenticated read verifications" ON public.verifications;
 DROP POLICY IF EXISTS "Allow authenticated insert verifications" ON public.verifications;
 
--- (A) PROFILES RLS:
--- Normal users can view own profile; Admins & Main Admin can view all profiles
-CREATE POLICY "Users can read own profile or admin read all"
+-- Normal users can view profiles (for creator info, project credits); Admins & Main Admin have full access
+CREATE POLICY "Users can read profiles"
   ON public.profiles
   FOR SELECT
   TO authenticated
-  USING (
-    auth.uid() = id OR public.is_admin()
-  );
+  USING (true);
 
 -- Pre-login lookup policy: allow anon to read email & user_id for login resolution
 CREATE POLICY "Allow username lookup for login"
@@ -291,30 +301,46 @@ CREATE POLICY "Users can update own profile or admin update all"
   );
 
 -- (B) MODELS RLS:
-CREATE POLICY "Allow authenticated read models"
+-- 1. Users can only select their own models (user_id = auth.uid()), public models, or admins can select all
+CREATE POLICY "Models select policy"
   ON public.models
   FOR SELECT
   TO authenticated
-  USING (true);
+  USING (
+    auth.uid() = user_id 
+    OR is_public = true 
+    OR public.is_admin()
+  );
 
-CREATE POLICY "Allow authenticated insert models"
+-- 2. Users can only insert models where user_id matches auth.uid()
+CREATE POLICY "Models insert policy"
   ON public.models
   FOR INSERT
   TO authenticated
-  WITH CHECK (true);
+  WITH CHECK (
+    auth.uid() = user_id
+  );
 
-CREATE POLICY "Allow owner or admin update models"
+-- 3. Users can only update their own models (user_id = auth.uid()); admins can update all
+CREATE POLICY "Models update policy"
   ON public.models
   FOR UPDATE
   TO authenticated
-  USING (true)
-  WITH CHECK (true);
+  USING (
+    auth.uid() = user_id OR public.is_admin()
+  )
+  WITH CHECK (
+    auth.uid() = user_id OR public.is_admin()
+  );
 
-CREATE POLICY "Allow owner or admin delete models"
+-- 4. Users can only delete their own models (user_id = auth.uid()); admins can delete all
+CREATE POLICY "Models delete policy"
   ON public.models
   FOR DELETE
   TO authenticated
-  USING (true);
+  USING (
+    auth.uid() = user_id OR public.is_admin()
+  );
 
 -- (C) VERIFICATIONS RLS:
 CREATE POLICY "Allow authenticated read verifications"

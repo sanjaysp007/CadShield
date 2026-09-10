@@ -431,19 +431,46 @@ export function saveRegisteredUserLocal(userObj) {
   } catch (_) {}
 }
 
-export function getStoredProjects() {
+export function getStoredProjects(userId) {
   try {
+    const curUser = getUser()
+    const targetUid = userId || curUser?.id
+    if (targetUid) {
+      const userRaw = localStorage.getItem(`cadshield_projects_${targetUid}`)
+      if (userRaw) {
+        return JSON.parse(userRaw)
+      }
+    }
+    // Fallback: strictly filter legacy storage by targetUid or current user's owner ID
     const raw = localStorage.getItem('cadshield_projects')
-    return raw ? JSON.parse(raw) : []
+    if (!raw) return []
+    const legacy = JSON.parse(raw)
+    if (!targetUid) return []
+    const curOwnerId = curUser?.user_id || curUser?.owner_id
+    const userProjects = legacy.filter(p => {
+      if (p.user_id && p.user_id === targetUid) return true
+      if (!p.user_id && curOwnerId && (p.owner_id === curOwnerId || p.creator_user_id === curOwnerId)) return true
+      return false
+    })
+    if (userProjects.length > 0) {
+      localStorage.setItem(`cadshield_projects_${targetUid}`, JSON.stringify(userProjects))
+    }
+    return userProjects
   } catch (_) {
     return []
   }
 }
 
-export function saveProjectToStorage(proj) {
+export function saveProjectToStorage(proj, userId) {
   if (!proj) return
   try {
-    const list = getStoredProjects()
+    const curUser = getUser()
+    const targetUid = userId || proj.user_id || curUser?.id
+    if (!targetUid) return
+
+    proj.user_id = targetUid
+
+    const list = getStoredProjects(targetUid)
     const idx = list.findIndex(p =>
       (p.id && proj.id && p.id === proj.id) ||
       (p.project_id && proj.project_id && p.project_id === proj.project_id)
@@ -453,7 +480,24 @@ export function saveProjectToStorage(proj) {
     } else {
       list.unshift({ ...proj, created_at: proj.created_at || new Date().toISOString() })
     }
-    localStorage.setItem('cadshield_projects', JSON.stringify(list))
+    localStorage.setItem(`cadshield_projects_${targetUid}`, JSON.stringify(list))
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('cadshield-projects-updated'))
+    }
+  } catch (_) {}
+}
+
+export function removeProjectFromStorage(projectId, userId) {
+  if (!projectId) return
+  try {
+    const curUser = getUser()
+    const targetUid = userId || curUser?.id
+    if (targetUid) {
+      const list = getStoredProjects(targetUid)
+      const filtered = list.filter(p => p.id !== projectId && p.project_id !== projectId)
+      localStorage.setItem(`cadshield_projects_${targetUid}`, JSON.stringify(filtered))
+    }
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('cadshield-projects-updated'))
     }
@@ -463,30 +507,40 @@ export function saveProjectToStorage(proj) {
 export async function toggleProjectGlobalSharing(projectId, isPublic) {
   if (!projectId) return null
 
-  // 1. Update in local storage
+  const curUser = getUser()
+  const targetUid = curUser?.id
+
+  // 1. Update in local user-partitioned storage
   let updatedProj = null
   try {
-    const list = getStoredProjects()
-    const idx = list.findIndex(p =>
-      p.id === projectId ||
-      p.project_id === projectId ||
-      (p.project_id && p.project_id.toUpperCase() === String(projectId).toUpperCase())
-    )
-    if (idx >= 0) {
-      list[idx].is_public = isPublic
-      list[idx].updated_at = new Date().toISOString()
-      updatedProj = list[idx]
-      localStorage.setItem('cadshield_projects', JSON.stringify(list))
+    if (targetUid) {
+      const list = getStoredProjects(targetUid)
+      const idx = list.findIndex(p =>
+        p.id === projectId ||
+        p.project_id === projectId ||
+        (p.project_id && p.project_id.toUpperCase() === String(projectId).toUpperCase())
+      )
+      if (idx >= 0) {
+        list[idx].is_public = isPublic
+        list[idx].updated_at = new Date().toISOString()
+        updatedProj = list[idx]
+        localStorage.setItem(`cadshield_projects_${targetUid}`, JSON.stringify(list))
+      }
     }
   } catch (_) {}
 
   // 2. Sync to Supabase models table
   try {
-    const { data, error } = await supabase
+    let query = supabase
       .from('models')
       .update({ is_public: isPublic })
       .or(`id.eq.${projectId},project_id.eq.${projectId}`)
-      .select()
+
+    if (curUser?.role !== 'admin' && curUser?.role !== 'main_admin' && targetUid) {
+      query = query.eq('user_id', targetUid)
+    }
+
+    const { data, error } = await query.select()
     if (!error && data && data.length > 0) {
       updatedProj = { ...updatedProj, ...data[0] }
     }
@@ -783,20 +837,33 @@ export async function fetchMe() {
     if (supaUser?.user) {
       const meta = supaUser.user.user_metadata || {}
       const user_id = meta.user_id || meta.owner_id || `OWN-${supaUser.user.id.replace(/-/g, '').substring(0, 8).toUpperCase()}`
+
+      let prof = null
+      try {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', supaUser.user.id)
+          .maybeSingle()
+        if (profile) prof = profile
+      } catch (_) {}
+
+      const isMain = supaUser.user.email?.toLowerCase() === 'mailtosanjaysp@gmail.com'
       const userObj = {
         id: supaUser.user.id,
-        user_id: user_id,
-        owner_id: user_id,
+        user_id: prof?.user_id || user_id,
+        owner_id: prof?.user_id || user_id,
         email: supaUser.user.email,
-        full_name: meta.full_name || supaUser.user.email.split('@')[0],
-        phone: meta.phone || null,
-        college_company: meta.college_company || meta.organization || null,
-        department: meta.department || null,
-        designation: meta.designation || null,
-        location: meta.location || null,
-        bio: meta.bio || null,
-        profile_photo: meta.profile_photo || null,
-        created_at: supaUser.user.created_at,
+        role: isMain ? 'main_admin' : (prof?.role || meta.role || 'user'),
+        full_name: prof?.name || meta.full_name || supaUser.user.email.split('@')[0],
+        phone: prof?.phone || meta.phone || null,
+        college_company: prof?.college_company || meta.college_company || meta.organization || null,
+        department: prof?.department || meta.department || null,
+        designation: prof?.designation || meta.designation || null,
+        location: prof?.location || meta.location || null,
+        bio: prof?.bio || meta.bio || null,
+        profile_photo: prof?.profile_photo || meta.profile_photo || null,
+        created_at: prof?.created_at || supaUser.user.created_at,
       }
       updateStoredUser(userObj)
       return userObj
@@ -816,7 +883,28 @@ export async function fetchMe() {
 
 // ── Profile API ───────────────────────────────────────
 export async function updateProfile(profileData) {
-  // Sync to Supabase user metadata
+  const cur = getUser()
+
+  // 1. Sync to Supabase profiles database table
+  if (cur?.id) {
+    try {
+      await supabase.from('profiles').update({
+        name: profileData.full_name || profileData.name || cur.full_name,
+        phone: profileData.phone ?? cur.phone,
+        college_company: profileData.college_company ?? cur.college_company,
+        department: profileData.department ?? cur.department,
+        designation: profileData.designation ?? cur.designation,
+        location: profileData.location ?? cur.location,
+        bio: profileData.bio ?? cur.bio,
+        profile_photo: profileData.profile_photo ?? cur.profile_photo,
+        updated_at: new Date().toISOString(),
+      }).eq('id', cur.id)
+    } catch (profErr) {
+      console.warn('Supabase profiles table update note:', profErr?.message)
+    }
+  }
+
+  // 2. Sync to Supabase user metadata
   try {
     await supabase.auth.updateUser({
       data: {
@@ -878,6 +966,15 @@ export async function uploadModel(file) {
   const currentUser = getUser()
   const realOwnerId = currentUser?.user_id || currentUser?.owner_id || generateOwnerId()
 
+  let supaUserId = null
+  try {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (user?.id) supaUserId = user.id
+  } catch (_) {}
+  if (!supaUserId && currentUser?.id) {
+    supaUserId = currentUser.id
+  }
+
   const ext = (file.name.split('.').pop() || 'stl').toLowerCase()
   const rawName = file.name.replace(/\.[^/.]+$/, '').replace(/[_.-]/g, ' ').trim()
   const titleCase = rawName.replace(/\w\S*/g, (w) => (w.replace(/^\w/, (c) => c.toUpperCase())))
@@ -928,6 +1025,7 @@ export async function uploadModel(file) {
 
   const uploadProj = {
     id: localModelId,
+    user_id: supaUserId,
     project_id: projectId,
     project_name: titleCase || file.name,
     name: file.name,
@@ -938,34 +1036,42 @@ export async function uploadModel(file) {
     creator_name: currentUser?.full_name || 'CAD User',
     creator_college: currentUser?.college_company || null,
     status: 'uploaded',
+    is_public: false,
     vertex_count: computedVerts,
     face_count: computedFaces,
     integrity_score: 100.0,
     created_at: new Date().toISOString(),
   }
 
-  // Save to persistent projects cache
-  saveProjectToStorage(uploadProj)
+  // Save to persistent user-partitioned projects cache
+  saveProjectToStorage(uploadProj, supaUserId)
 
-  // Sync to Supabase models table if reachable
-  try {
-    await supabase.from('models').upsert({
-      id: localModelId,
-      project_id: projectId,
-      project_name: titleCase || file.name,
-      name: file.name,
-      file_format: ext,
-      owner_id: realOwnerId,
-      creator_user_id: realOwnerId,
-      creator_name: currentUser?.full_name || 'CAD User',
-      creator_college: currentUser?.college_company || null,
-      status: 'uploaded',
-      vertex_count: computedVerts,
-      face_count: computedFaces,
-      integrity_score: 100.0,
-      created_at: uploadProj.created_at,
-    })
-  } catch (_) {}
+  // Sync to Supabase models table with strict user_id ownership
+  if (supaUserId) {
+    try {
+      await supabase.from('models').upsert({
+        id: localModelId,
+        user_id: supaUserId,
+        project_id: projectId,
+        project_name: titleCase || file.name,
+        name: file.name,
+        original_filename: file.name,
+        file_format: ext,
+        owner_id: realOwnerId,
+        creator_user_id: realOwnerId,
+        creator_name: currentUser?.full_name || 'CAD User',
+        creator_college: currentUser?.college_company || null,
+        status: 'uploaded',
+        is_public: false,
+        vertex_count: computedVerts,
+        face_count: computedFaces,
+        integrity_score: 100.0,
+        created_at: uploadProj.created_at,
+      })
+    } catch (supaErr) {
+      console.warn('Supabase uploadModel record save note:', supaErr?.message)
+    }
+  }
 
   const live = await checkBackend()
   if (live) {
@@ -1046,12 +1152,22 @@ export async function embedWatermark(modelId, ownershipData) {
     }
   }
 
+  let supaUserId = null
+  try {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (user?.id) supaUserId = user.id
+  } catch (_) {}
+  if (!supaUserId && currentUser?.id) {
+    supaUserId = currentUser.id
+  }
+
   const finalIntegrity = clientResult?.integrity_score || backendResult?.integrity_score || 99.8
   const finalDistortion = clientResult?.distortion_pct || backendResult?.distortion_pct || 0.04
   const finalWmId = clientResult?.watermark_id || backendResult?.watermark_id || `wm-${Date.now().toString(36)}`
 
   const watermarkedProj = {
     id: modelId,
+    user_id: supaUserId,
     project_id: realProjectId,
     project_name: projectName,
     name: cachedFile?.name || 'protected_model.stl',
@@ -1062,6 +1178,7 @@ export async function embedWatermark(modelId, ownershipData) {
     creator_name: realDesigner,
     creator_college: currentUser?.college_company || null,
     status: 'watermarked',
+    is_public: false,
     integrity_score: finalIntegrity,
     distortion_percentage: finalDistortion,
     watermark_id: finalWmId,
@@ -1070,29 +1187,34 @@ export async function embedWatermark(modelId, ownershipData) {
     created_at: new Date().toISOString(),
   }
 
-  // Save to persistent projects cache
-  saveProjectToStorage(watermarkedProj)
+  // Save to persistent user-partitioned projects cache
+  saveProjectToStorage(watermarkedProj, supaUserId)
 
-  // Sync model to Supabase models table
-  try {
-    await supabase.from('models').upsert({
-      id: modelId,
-      project_id: realProjectId,
-      project_name: projectName,
-      name: cachedFile?.name || 'protected_model.stl',
-      file_format: (cachedFile?.name || 'stl').split('.').pop()?.toLowerCase(),
-      owner_id: realOwnerId,
-      creator_user_id: realOwnerId,
-      creator_name: realDesigner,
-      creator_college: currentUser?.college_company || null,
-      status: 'watermarked',
-      integrity_score: finalIntegrity,
-      distortion_percentage: finalDistortion,
-      watermark_metadata: JSON.stringify(clientResult || backendResult || {}),
-      created_at: watermarkedProj.created_at,
-    })
-  } catch (supaErr) {
-    console.warn('Supabase models record save note:', supaErr?.message)
+  // Sync model to Supabase models table with strict user_id ownership
+  if (supaUserId) {
+    try {
+      await supabase.from('models').upsert({
+        id: modelId,
+        user_id: supaUserId,
+        project_id: realProjectId,
+        project_name: projectName,
+        name: cachedFile?.name || 'protected_model.stl',
+        original_filename: cachedFile?.name || 'protected_model.stl',
+        file_format: (cachedFile?.name || 'stl').split('.').pop()?.toLowerCase(),
+        owner_id: realOwnerId,
+        creator_user_id: realOwnerId,
+        creator_name: realDesigner,
+        creator_college: currentUser?.college_company || null,
+        status: 'watermarked',
+        is_public: false,
+        integrity_score: finalIntegrity,
+        distortion_percentage: finalDistortion,
+        watermark_metadata: JSON.stringify(clientResult || backendResult || {}),
+        created_at: watermarkedProj.created_at,
+      })
+    } catch (supaErr) {
+      console.warn('Supabase models record save note:', supaErr?.message)
+    }
   }
 
   return {
@@ -1167,60 +1289,68 @@ export async function downloadWatermarkedModel(modelId, filename = 'protected_mo
 }
 
 export async function getMyProjects() {
+  // 1. Get authenticated Supabase user UUID (source of truth)
+  let supaUserId = null
+  try {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (user?.id) supaUserId = user.id
+  } catch (_) {}
+
   const currentUser = getUser()
-  const userId = (currentUser?.user_id || currentUser?.owner_id || '').trim()
-  const currentEmail = (currentUser?.email || '').trim().toLowerCase()
+  if (!supaUserId && currentUser?.id) {
+    supaUserId = currentUser.id
+  }
+
+  if (!supaUserId) {
+    return [] // Never return projects if user is not authenticated
+  }
+
+  const userPublicId = (currentUser?.user_id || currentUser?.owner_id || '').trim()
   let list = []
 
-  // 1. Try backend
-  const live = await checkBackend()
-  if (live) {
-    try {
-      const { data } = await api.get('/api/models/my-projects')
-      if (Array.isArray(data) && data.length > 0) list = [...data]
-    } catch (_) {}
+  // 2. Query Supabase strictly by authenticated user UUID
+  try {
+    const { data, error } = await supabase
+      .from('models')
+      .select('*')
+      .eq('user_id', supaUserId)
+      .order('created_at', { ascending: false })
+
+    if (!error && Array.isArray(data)) {
+      list = [...data]
+    }
+  } catch (supaErr) {
+    console.warn('Supabase getMyProjects query notice:', supaErr?.message)
   }
 
-  // 2. Try Supabase
-  if (currentUser) {
-    try {
-      const { data, error } = await supabase
-        .from('models')
-        .select('*')
-        .order('created_at', { ascending: false })
-
-      if (!error && Array.isArray(data) && data.length > 0) {
-        for (const item of data) {
-          const itemOwner = item.owner_id || item.creator_user_id
-          const itemEmail = item.email || ''
-          const matches = !userId || itemOwner === userId || itemEmail.toLowerCase() === currentEmail
-          if (matches && !list.some(p => p.id === item.id || (p.project_id && p.project_id === item.project_id))) {
-            list.push(item)
-          }
-        }
-      }
-    } catch (_) {}
-  }
-
-  // 3. Merge with local stored projects
-  const stored = getStoredProjects()
+  // 3. Merge with user-partitioned local stored projects (strict isolation)
+  const stored = getStoredProjects(supaUserId)
   for (const sp of stored) {
-    const spOwner = sp.owner_id || sp.creator_user_id
-    const matches = !userId || !spOwner || spOwner === userId || sp.email?.toLowerCase() === currentEmail
-    if (matches) {
+    // Explicitly reject any project record belonging to a different user
+    if (sp.user_id && sp.user_id !== supaUserId) {
+      continue
+    }
+
+    const matchesUser = (sp.user_id === supaUserId) ||
+                        (!sp.user_id && userPublicId && (sp.owner_id === userPublicId || sp.creator_user_id === userPublicId))
+
+    if (matchesUser) {
       const existingIdx = list.findIndex(p =>
         (p.id && sp.id && p.id === sp.id) ||
         (p.project_id && sp.project_id && p.project_id === sp.project_id)
       )
       if (existingIdx === -1) {
-        list.push(sp)
+        list.push({ ...sp, user_id: supaUserId })
       } else {
-        list[existingIdx] = { ...list[existingIdx], ...sp }
+        list[existingIdx] = { ...list[existingIdx], ...sp, user_id: supaUserId }
       }
     }
   }
 
-  return list.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0))
+  // Final verification: ensure every single project returned strictly belongs to supaUserId
+  const verifiedList = list.filter(p => !p.user_id || p.user_id === supaUserId)
+
+  return verifiedList.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0))
 }
 
 export async function verifyProjectById(projectId) {
@@ -1360,7 +1490,10 @@ export async function verifyModel(file, modelId = null) {
 }
 
 export async function getModels() {
+  const cur = getUser()
+  const isAdminUser = cur?.role === 'admin' || cur?.role === 'main_admin'
   let list = []
+
   const live = await checkBackend()
   if (live) {
     try {
@@ -1369,7 +1502,11 @@ export async function getModels() {
     } catch (_) {}
   }
   try {
-    const { data } = await supabase.from('models').select('*').order('created_at', { ascending: false }).limit(50)
+    let query = supabase.from('models').select('*').order('created_at', { ascending: false }).limit(100)
+    if (!isAdminUser && cur?.id) {
+      query = query.or(`user_id.eq.${cur.id},is_public.eq.true`)
+    }
+    const { data } = await query
     if (Array.isArray(data) && data.length > 0) {
       for (const m of data) {
         if (!list.some(p => p.id === m.id || (p.project_id && p.project_id === m.project_id))) {
@@ -1379,9 +1516,12 @@ export async function getModels() {
     }
   } catch (_) {}
 
-  // Merge with locally stored projects
-  const stored = getStoredProjects()
+  // Merge with locally stored projects (partitioned for current user)
+  const stored = getStoredProjects(cur?.id)
   for (const sp of stored) {
+    if (!isAdminUser && sp.user_id && sp.user_id !== cur?.id && !sp.is_public) {
+      continue
+    }
     const existingIdx = list.findIndex(p =>
       (p.id && sp.id && p.id === sp.id) ||
       (p.project_id && sp.project_id && p.project_id === sp.project_id)
@@ -1537,17 +1677,26 @@ export async function fetchProject3DFile(idOrProjectId, secondaryKey = null) {
 }
 
 export async function deleteModel(id) {
+  const cur = getUser()
   const live = await checkBackend()
   if (live) {
-    const { data } = await api.delete(`/api/models/${id}`)
-    return data
+    try {
+      const { data } = await api.delete(`/api/models/${id}`)
+    } catch (_) {}
   }
   try {
-    await supabase.from('models').delete().eq('id', id)
-    return { message: 'Deleted' }
+    let query = supabase.from('models').delete().eq('id', id)
+    if (cur?.role !== 'admin' && cur?.role !== 'main_admin' && cur?.id) {
+      query = query.eq('user_id', cur.id)
+    }
+    await query
   } catch (err) {
-    throw err
+    console.warn('deleteModel Supabase notice:', err?.message)
   }
+
+  // Remove from user-partitioned local storage
+  removeProjectFromStorage(id, cur?.id)
+  return { message: 'Deleted' }
 }
 
 export async function getDashboardStats() {

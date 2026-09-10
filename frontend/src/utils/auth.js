@@ -124,6 +124,20 @@ export function authHeaders() {
   return token ? { Authorization: `Bearer ${token}` } : {}
 }
 
+let isAuthInitialized = false
+let authReadyResolve = null
+const authReadyPromise = new Promise(resolve => {
+  authReadyResolve = resolve
+})
+
+export function isSessionReady() {
+  return isAuthInitialized
+}
+
+export function waitForSession() {
+  return authReadyPromise
+}
+
 /**
  * Initialize and sync Supabase session on application load.
  * Ensures page refresh keeps the user authenticated and fetches role from profiles table.
@@ -153,6 +167,23 @@ export async function initSupabaseSession() {
 
         if (profile) {
           role = supaUser.email?.toLowerCase() === 'mailtosanjaysp@gmail.com' ? 'main_admin' : (profile.role || role)
+          const userObj = {
+            id: supaUser.id,
+            user_id: profile.user_id || user_id,
+            owner_id: profile.user_id || user_id,
+            email: profile.email || supaUser.email,
+            role: role,
+            full_name: profile.name || meta.full_name || existing.full_name || supaUser.email?.split('@')[0],
+            phone: profile.phone || meta.phone || existing.phone || null,
+            college_company: profile.college_company || meta.college_company || existing.college_company || null,
+            department: profile.department || meta.department || existing.department || null,
+            designation: profile.designation || meta.designation || existing.designation || null,
+            location: profile.location || meta.location || existing.location || null,
+            bio: profile.bio || meta.bio || existing.bio || null,
+            profile_photo: profile.profile_photo || meta.profile_photo || existing.profile_photo || null,
+            created_at: profile.created_at || supaUser.created_at,
+          }
+          saveAuth(session.access_token, userObj)
         } else {
           // If profile does not exist yet, auto-create it non-sensitively
           await supabase.from('profiles').upsert({
@@ -163,45 +194,45 @@ export async function initSupabaseSession() {
             role: role,
             phone: meta.phone || null,
             profile_photo: meta.profile_photo || null,
+            college_company: meta.college_company || meta.organization || null,
             created_at: supaUser.created_at,
           })
+          const userObj = {
+            ...existing,
+            id: supaUser.id,
+            user_id: user_id,
+            owner_id: user_id,
+            email: supaUser.email,
+            role: role,
+            full_name: meta.full_name || existing.full_name || supaUser.email?.split('@')[0],
+            college_company: meta.college_company || meta.organization || existing.college_company || null,
+            created_at: supaUser.created_at,
+          }
+          saveAuth(session.access_token, userObj)
         }
       } catch (profileErr) {
         console.warn('Profiles table sync notice:', profileErr?.message)
+        const userObj = {
+          ...existing,
+          id: supaUser.id,
+          user_id: user_id,
+          owner_id: user_id,
+          email: supaUser.email,
+          role: role,
+          full_name: meta.full_name || existing.full_name || supaUser.email?.split('@')[0],
+          created_at: supaUser.created_at,
+        }
+        saveAuth(session.access_token, userObj)
       }
-
-      // Check role overrides map
-      if (supaUser.email?.toLowerCase() !== 'mailtosanjaysp@gmail.com') {
-        try {
-          const overrides = JSON.parse(localStorage.getItem('cadshield_role_overrides') || '{}')
-          const ovRole = overrides[supaUser.email?.toLowerCase()] || overrides[user_id] || overrides[supaUser.id]
-          if (ovRole) role = ovRole
-        } catch (_) {}
+    } else {
+      // No active Supabase session
+      if (!isLoggedIn()) {
+        clearAuth()
       }
-
-      const userObj = {
-        ...existing,
-        id: supaUser.id,
-        user_id: user_id,
-        owner_id: user_id,
-        email: supaUser.email,
-        role: role,
-        full_name: meta.full_name || existing.full_name || supaUser.email?.split('@')[0],
-        phone: meta.phone || existing.phone || null,
-        college_company: meta.college_company || meta.organization || existing.college_company || null,
-        department: meta.department || existing.department || null,
-        designation: meta.designation || existing.designation || null,
-        location: meta.location || existing.location || null,
-        bio: meta.bio || existing.bio || null,
-        profile_photo: meta.profile_photo || existing.profile_photo || null,
-        created_at: supaUser.created_at,
-      }
-      saveAuth(session.access_token, userObj)
     }
 
     // Subscribe to auth state changes
     supabase.auth.onAuthStateChange(async (event, session) => {
-      // During password recovery, do not establish normal login session until password is set
       if (event === 'PASSWORD_RECOVERY') {
         return
       }
@@ -213,50 +244,59 @@ export async function initSupabaseSession() {
         const existing = getUser() || {}
 
         let role = meta.role || existing.role || 'user'
+        let prof = null
         try {
           const { data: profile } = await supabase
             .from('profiles')
-            .select('role')
+            .select('*')
             .eq('id', supaUser.id)
             .maybeSingle()
-        if (profile?.role) role = profile.role
-      } catch (_) {}
-
-      // Ensure Main Admin protection
-      if (supaUser.email?.toLowerCase() === 'mailtosanjaysp@gmail.com') {
-        role = 'main_admin'
-        try {
-          supabase.from('profiles').update({ role: 'main_admin' }).eq('id', supaUser.id).then(() => {})
-        } catch (_) {}
-      } else {
-        // Check role overrides map
-        try {
-          const overrides = JSON.parse(localStorage.getItem('cadshield_role_overrides') || '{}')
-          const ovRole = overrides[supaUser.email?.toLowerCase()] || overrides[user_id] || overrides[supaUser.id]
-          if (ovRole && ovRole !== role) {
-            role = ovRole
+          if (profile) {
+            prof = profile
+            role = profile.role || role
           }
         } catch (_) {}
-      }
 
-      const userObj = {
-        ...existing,
-        id: supaUser.id,
-        user_id: user_id,
-        owner_id: user_id,
-        email: supaUser.email,
-        role: role,
-        full_name: meta.full_name || existing.full_name || supaUser.email?.split('@')[0],
-        created_at: supaUser.created_at,
+        // Ensure Main Admin protection
+        if (supaUser.email?.toLowerCase() === 'mailtosanjaysp@gmail.com') {
+          role = 'main_admin'
+          try {
+            supabase.from('profiles').update({ role: 'main_admin' }).eq('id', supaUser.id).then(() => {})
+          } catch (_) {}
+        }
+
+        const userObj = {
+          ...existing,
+          id: supaUser.id,
+          user_id: prof?.user_id || user_id,
+          owner_id: prof?.user_id || user_id,
+          email: supaUser.email,
+          role: role,
+          full_name: prof?.name || meta.full_name || existing.full_name || supaUser.email?.split('@')[0],
+          phone: prof?.phone || meta.phone || existing.phone || null,
+          college_company: prof?.college_company || meta.college_company || existing.college_company || null,
+          department: prof?.department || meta.department || existing.department || null,
+          designation: prof?.designation || meta.designation || existing.designation || null,
+          location: prof?.location || meta.location || existing.location || null,
+          bio: prof?.bio || meta.bio || existing.bio || null,
+          profile_photo: prof?.profile_photo || meta.profile_photo || existing.profile_photo || null,
+          created_at: prof?.created_at || supaUser.created_at,
+        }
+        saveAuth(session.access_token, userObj)
+      } else if (event === 'SIGNED_OUT') {
+        clearAuth()
       }
-      saveAuth(session.access_token, userObj)
-    } else if (event === 'SIGNED_OUT') {
-      clearAuth()
+    })
+  } catch (err) {
+    console.warn('Supabase session init error:', err)
+  } finally {
+    isAuthInitialized = true
+    if (authReadyResolve) authReadyResolve(true)
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('cadshield-auth-ready'))
+      window.dispatchEvent(new Event('cadshield-user-updated'))
     }
-  })
-} catch (err) {
-  console.warn('Supabase session init error:', err)
-}
+  }
 }
 
 /**
