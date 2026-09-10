@@ -100,14 +100,22 @@ export default function HistoryPage() {
   const [page,    setPage]    = useState(1)
   const [delTarget, setDelTarget] = useState(null)
 
+  const load = () => {
+    getModels().then(m => { setModels(m || []); setLoading(false) })
+  }
+
   useEffect(() => { document.title = 'Model History – CADShield' }, [])
-  useEffect(() => { getModels().then(m => { setModels(m); setLoading(false) }) }, [])
+  useEffect(() => {
+    load()
+    window.addEventListener('cadshield-projects-updated', load)
+    return () => window.removeEventListener('cadshield-projects-updated', load)
+  }, [])
 
   const filtered = useMemo(() => models.filter(m => {
     const q = search.toLowerCase()
-    const s = !q || [m.name, m.owner_id, m.model_id_str].filter(Boolean).some(v => v.toLowerCase().includes(q))
-    const st = status === 'all' || m.status === status
-    const f  = fmt    === 'all' || m.file_format === fmt
+    const s = !q || [m.name, m.project_name, m.owner_id, m.creator_user_id, m.model_id_str, m.project_id].filter(Boolean).some(v => v.toLowerCase().includes(q))
+    const st = status === 'all' || (m.status && m.status.toLowerCase() === status.toLowerCase())
+    const f  = fmt    === 'all' || (m.file_format && m.file_format.toLowerCase() === fmt.toLowerCase())
     return s && st && f
   }), [models, search, status, fmt])
 
@@ -125,7 +133,7 @@ export default function HistoryPage() {
 
   const exportCSV = () => {
     const hdr = 'Model ID,Name,Owner,Status,Integrity,Format,Created'
-    const rows = filtered.map(m => [m.id,m.name,m.owner_id||'',m.status,m.integrity_score,m.file_format,m.created_at].join(','))
+    const rows = filtered.map(m => [m.project_id||m.id, m.project_name||m.name, m.owner_id||m.creator_user_id||'', m.status, m.integrity_score, m.file_format, m.created_at].join(','))
     const blob = new Blob([[hdr,...rows].join('\n')],{type:'text/csv'})
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download='cadshield_models.csv'; a.click()
   }
@@ -147,52 +155,50 @@ export default function HistoryPage() {
                 Model{' '}
                 <span style={{ background:'linear-gradient(135deg,#00e5ff,#8b5cf6)', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent', backgroundClip:'text' }}>History</span>
               </h1>
-              <p style={{ color: '#374151', fontSize: '0.85rem' }}>
+              <p style={{ color: '#94a3b8', fontSize: '0.85rem' }}>
                 {filtered.length} model{filtered.length !== 1 ? 's' : ''} found
               </p>
             </div>
-            <button
-              onClick={exportCSV}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 8,
-                padding: '9px 16px', borderRadius: 12,
-                background: 'rgba(255,255,255,0.03)',
-                border: '1px solid rgba(255,255,255,0.07)',
-                color: '#6b7a8d', fontSize: '0.8rem', cursor: 'pointer',
-              }}
-            >
-              <FileDown size={13} /> Export CSV
-            </button>
+
+            <div style={{ display: 'flex', gap: 10 }}>
+              <NeonButton variant="ghost" icon={FileDown} onClick={exportCSV}>
+                Export CSV
+              </NeonButton>
+            </div>
           </div>
 
-          {/* Filter bar */}
-          <div style={{
-            display: 'flex', flexWrap: 'wrap', gap: 10, marginBottom: 20,
-            padding: '14px 16px', borderRadius: 16,
-            background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)',
-          }}>
-            {/* Search */}
-            <div style={{
-              flex: '1 1 200px', display: 'flex', alignItems: 'center', gap: 8,
-              background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)',
-              borderRadius: 10, padding: '0 12px', minWidth: 200,
-            }}>
-              <Search size={13} style={{ color: '#374151', flexShrink: 0 }} />
+          {/* Filters */}
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginBottom: 24 }}>
+            <div style={{ flex: 1, minWidth: 240, position: 'relative' }}>
+              <Search size={16} style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
               <input
-                style={{ flex: 1, background: 'none', border: 'none', outline: 'none', color: '#f0f4ff', fontSize: '0.85rem', padding: '9px 0', fontFamily: 'Inter' }}
-                placeholder="Search models, owners, IDs…"
-                value={search} onChange={e => { setSearch(e.target.value); setPage(1) }}
+                value={search}
+                onChange={e => { setSearch(e.target.value); setPage(1) }}
+                placeholder="Search models, owners, IDs..."
+                className="input-field"
+                style={{ paddingLeft: 40 }}
               />
-              {search && <button onClick={() => setSearch('')} style={{ background:'none', border:'none', cursor:'pointer', color:'#374151' }}><X size={12} /></button>}
             </div>
-            {/* Dropdowns */}
-            <select value={status} onChange={e => { setStatus(e.target.value); setPage(1) }} className="input-field" style={{ width: 'auto', flex: '0 0 auto' }}>
+
+            <select
+              value={status}
+              onChange={e => { setStatus(e.target.value); setPage(1) }}
+              className="input-field"
+              style={{ width: 'auto', minWidth: 140 }}
+            >
               <option value="all">All Status</option>
               <option value="watermarked">Watermarked</option>
               <option value="verified">Verified</option>
               <option value="uploaded">Uploaded</option>
+              <option value="tampered">Tampered</option>
             </select>
-            <select value={fmt} onChange={e => { setFmt(e.target.value); setPage(1) }} className="input-field" style={{ width: 'auto', flex: '0 0 auto' }}>
+
+            <select
+              value={fmt}
+              onChange={e => { setFmt(e.target.value); setPage(1) }}
+              className="input-field"
+              style={{ width: 'auto', minWidth: 130 }}
+            >
               <option value="all">All Formats</option>
               <option value="stl">STL</option>
               <option value="obj">OBJ</option>
@@ -219,39 +225,60 @@ export default function HistoryPage() {
                       </motion.div>
                     </td></tr>
                   ) : rows.length === 0 ? (
-                    <tr><td colSpan={8} style={{ padding: '60px', textAlign: 'center', color: '#2d3748' }}>
+                    <tr><td colSpan={8} style={{ padding: '60px', textAlign: 'center', color: '#94a3b8' }}>
                       {search || status !== 'all' || fmt !== 'all'
                         ? 'No models match your filters.'
                         : 'No models yet. Protect your first model!'}
                     </td></tr>
                   ) : rows.map((m, i) => (
                     <motion.tr
-                      key={m.id}
+                      key={m.id || i}
                       initial={{ opacity: 0, x: -10 }}
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ delay: i * 0.04 }}
                     >
-                      <td style={{ color: '#2d3748', fontSize: '0.75rem' }}>{(page-1)*PER_PAGE+i+1}</td>
+                      <td style={{ color: '#94a3b8', fontSize: '0.75rem' }}>{(page-1)*PER_PAGE+i+1}</td>
                       <td>
-                        <div style={{ fontWeight: 600, color: '#f0f4ff', fontSize: '0.88rem' }}>{m.name}</div>
-                        {m.model_id_str && <div style={{ fontFamily: 'monospace', fontSize: '0.7rem', color: '#374151', marginTop: 2 }}>{m.model_id_str}</div>}
+                        <div style={{ fontWeight: 600, color: '#f0f4ff', fontSize: '0.88rem' }}>{m.project_name || m.name}</div>
+                        {(m.project_id || m.model_id_str) && (
+                          <div style={{ fontFamily: 'monospace', fontSize: '0.7rem', color: '#00e5ff', marginTop: 2 }}>
+                            {m.project_id || m.model_id_str}
+                          </div>
+                        )}
                       </td>
                       <td>
-                        <div style={{ fontSize: '0.85rem' }}>{m.owner_id || <span style={{ color: '#2d3748' }}>—</span>}</div>
-                        {m.designer_name && <div style={{ fontSize: '0.72rem', color: '#374151' }}>{m.designer_name}</div>}
+                        <div style={{ fontSize: '0.85rem', color: '#cbd5e1' }}>{m.owner_id || m.creator_user_id || <span style={{ color: '#94a3b8' }}>—</span>}</div>
+                        {(m.creator_name || m.designer_name) && (
+                          <div style={{ fontSize: '0.72rem', color: '#94a3b8' }}>{m.creator_name || m.designer_name}</div>
+                        )}
                       </td>
                       <td><StatusBadge status={m.status} /></td>
-                      <td><IntBar v={m.integrity_score} /></td>
+                      <td><IntBar v={m.integrity_score ?? 100} /></td>
                       <td><span className="badge badge-cyan">{(m.file_format||'STL').toUpperCase()}</span></td>
-                      <td style={{ fontSize: '0.78rem', color: '#374151' }}>
-                        {m.created_at ? format(new Date(m.created_at),'MMM d, yyyy') : '—'}
+                      <td style={{ fontSize: '0.78rem', color: '#94a3b8' }}>
+                        {m.created_at ? format(new Date(m.created_at),'MMM d, yyyy') : 'Recent'}
                       </td>
                       <td>
                         <div style={{ display: 'flex', gap: 4 }}>
                           {[
-                            { icon: Eye,          title: 'View',   color: '#00e5ff', action: () => navigate('/viewer') },
-                            { icon: CheckCircle,  title: 'Verify', color: '#22c55e', action: () => navigate('/verify') },
-                            { icon: Trash2,       title: 'Delete', color: '#f43f5e', action: () => setDelTarget(m) },
+                            {
+                              icon: Eye,
+                              title: '3D View',
+                              color: '#00e5ff',
+                              action: () => navigate(`/viewer?id=${encodeURIComponent(m.id || '')}&projectId=${encodeURIComponent(m.project_id || m.model_id_str || '')}`)
+                            },
+                            {
+                              icon: CheckCircle,
+                              title: 'Verify',
+                              color: '#22c55e',
+                              action: () => navigate(m.project_id ? `/verify-project?id=${encodeURIComponent(m.project_id)}` : '/verify')
+                            },
+                            {
+                              icon: Trash2,
+                              title: 'Delete',
+                              color: '#f43f5e',
+                              action: () => setDelTarget(m)
+                            },
                           ].map(({ icon: Icon, title, color, action }) => (
                             <button
                               key={title} onClick={action} title={title}

@@ -281,7 +281,7 @@ export default function MyProjectsPage() {
                         </Link>
                       )}
 
-                      <Link to="/viewer" style={{ textDecoration: 'none' }}>
+                      <Link to={`/viewer?id=${encodeURIComponent(proj.id || '')}&projectId=${encodeURIComponent(proj.project_id || '')}`} style={{ textDecoration: 'none' }}>
                         <button
                           style={{
                             padding: '9px 12px', borderRadius: 10,

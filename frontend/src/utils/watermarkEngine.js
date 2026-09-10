@@ -363,9 +363,25 @@ function parseMarkerFromText(text) {
 
 /**
  * Generate a valid binary STL Blob with authentic CADShield watermark header
+ * and valid 3D mesh geometry so it renders in STLLoader and any CAD viewer.
  */
 export function createSampleWatermarkedSTL(owner_id = 'OWN-DEMO-0001', project_id = 'PRJ-DEMO', watermark_id = 'wm-demo') {
-  const buffer = new ArrayBuffer(84)
+  // Construct a solid 3D box geometry (12 triangles)
+  const v = [
+    [-1.2, -1.2, -1.2], [1.2, -1.2, -1.2], [1.2, 1.2, -1.2], [-1.2, 1.2, -1.2],
+    [-1.2, -1.2,  1.2], [1.2, -1.2,  1.2], [1.2, 1.2,  1.2], [-1.2, 1.2,  1.2]
+  ]
+  const faces = [
+    [0, 2, 1], [0, 3, 2], // back
+    [4, 5, 6], [4, 6, 7], // front
+    [0, 7, 3], [0, 4, 7], // left
+    [1, 2, 6], [1, 6, 5], // right
+    [3, 7, 6], [3, 6, 2], // top
+    [0, 1, 5], [0, 5, 4]  // bottom
+  ]
+
+  const numTriangles = faces.length
+  const buffer = new ArrayBuffer(84 + numTriangles * 50)
   const view = new Uint8Array(buffer)
   view.fill(0x20, 0, 80)
   const headerStr = `CADShield|V1|OWN:${owner_id}|PRJ:${project_id}|WM:${watermark_id}|SIG:cadshield_sig`
@@ -373,7 +389,32 @@ export function createSampleWatermarkedSTL(owner_id = 'OWN-DEMO-0001', project_i
   for (let i = 0; i < Math.min(enc.length, 80); i++) {
     view[i] = enc[i]
   }
+
   const dv = new DataView(buffer)
-  dv.setUint32(80, 0, true)
+  dv.setUint32(80, numTriangles, true)
+  let offset = 84
+
+  for (const f of faces) {
+    const v0 = v[f[0]], v1 = v[f[1]], v2 = v[f[2]]
+    // normal
+    dv.setFloat32(offset, 0, true); offset += 4
+    dv.setFloat32(offset, 0, true); offset += 4
+    dv.setFloat32(offset, 0, true); offset += 4
+    // vertex 1
+    dv.setFloat32(offset, v0[0], true); offset += 4
+    dv.setFloat32(offset, v0[1], true); offset += 4
+    dv.setFloat32(offset, v0[2], true); offset += 4
+    // vertex 2
+    dv.setFloat32(offset, v1[0], true); offset += 4
+    dv.setFloat32(offset, v1[1], true); offset += 4
+    dv.setFloat32(offset, v1[2], true); offset += 4
+    // vertex 3
+    dv.setFloat32(offset, v2[0], true); offset += 4
+    dv.setFloat32(offset, v2[1], true); offset += 4
+    dv.setFloat32(offset, v2[2], true); offset += 4
+    // attribute byte count
+    dv.setUint16(offset, 0, true); offset += 2
+  }
+
   return new Blob([buffer], { type: 'application/octet-stream' })
 }

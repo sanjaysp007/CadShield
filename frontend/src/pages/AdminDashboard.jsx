@@ -5,7 +5,7 @@ import {
   ShieldAlert, Users, ShieldCheck, UserCheck, Search,
   RefreshCw, Copy, Check, Calendar, Phone, Mail, ArrowLeft,
   Lock, AlertTriangle, ExternalLink, Sparkles, Layers, Activity,
-  FileCheck, UserPlus, UserMinus, Building2, BarChart2
+  FileCheck, UserPlus, UserMinus, Building2, BarChart2, Eye
 } from 'lucide-react'
 import { format } from 'date-fns'
 import toast from 'react-hot-toast'
@@ -42,6 +42,9 @@ export default function AdminDashboard() {
     } else {
       setLoading(false)
     }
+    const reload = () => { if (authorized) loadAllData() }
+    window.addEventListener('cadshield-projects-updated', reload)
+    return () => window.removeEventListener('cadshield-projects-updated', reload)
   }, [authorized])
 
   const loadAllData = async () => {
@@ -608,16 +611,17 @@ export default function AdminDashboard() {
                       <th style={{ padding: '14px 16px' }}>Status</th>
                       <th style={{ padding: '14px 16px' }}>Integrity</th>
                       <th style={{ padding: '14px 20px' }}>Registered Date</th>
+                      <th style={{ padding: '14px 16px' }}>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
                     {models.map((m, idx) => (
                       <tr key={m.id || idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
                         <td style={{ padding: '14px 20px', fontWeight: 600, color: '#f0f4ff' }}>
-                          {m.name || m.original_filename || m.filename || 'Untitled Model'}
+                          {m.project_name || m.name || m.original_filename || m.filename || 'Untitled Model'}
                         </td>
                         <td style={{ padding: '14px 16px', fontFamily: 'monospace', color: '#00e5ff' }}>
-                          {m.owner_id || m.user_id || '—'}
+                          {m.owner_id || m.user_id || m.creator_user_id || '—'}
                         </td>
                         <td style={{ padding: '14px 16px', textTransform: 'uppercase', color: '#a78bfa', fontWeight: 600, fontSize: '0.75rem' }}>
                           {m.file_format || m.format || 'STL'}
@@ -637,6 +641,19 @@ export default function AdminDashboard() {
                         </td>
                         <td style={{ padding: '14px 20px', color: '#94a3b8', fontSize: '0.78rem' }}>
                           {m.created_at ? format(new Date(m.created_at), 'MMM d, yyyy') : 'Recent'}
+                        </td>
+                        <td style={{ padding: '14px 16px' }}>
+                          <div style={{ display: 'flex', gap: 6 }}>
+                            <Link to={`/viewer?id=${encodeURIComponent(m.id || '')}&projectId=${encodeURIComponent(m.project_id || '')}`} style={{ textDecoration: 'none' }}>
+                              <button style={{
+                                padding: '5px 10px', borderRadius: 6, fontSize: '0.72rem', fontWeight: 600,
+                                background: 'rgba(0,229,255,0.1)', border: '1px solid rgba(0,229,255,0.25)',
+                                color: '#00e5ff', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4,
+                              }}>
+                                <Eye size={12} /> 3D View
+                              </button>
+                            </Link>
+                          </div>
                         </td>
                       </tr>
                     ))}
