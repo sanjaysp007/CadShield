@@ -389,15 +389,24 @@ export async function downloadWatermarkedModel(modelId, filename = 'protected_mo
 
 export async function getMyProjects() {
   const live = await checkBackend()
-  const currentUser = getUser()
-  if (!live) {
-    return [
-      { id: 'p-1', project_id: 'PRJ-A8K2-9M4F', project_name: 'Aerospace Turbine Housing', name: 'turbine_housing.stl', original_filename: 'turbine_housing.stl', creator_user_id: currentUser?.user_id || 'OWN-DEMO-0001', creator_name: currentUser?.full_name || 'Jane Doe', status: 'watermarked', integrity_score: 99.8, vertex_count: 5410, face_count: 10820, file_format: 'stl', created_at: new Date(Date.now() - 86400000 * 2).toISOString() },
-      { id: 'p-2', project_id: 'PRJ-C3F7-1B9Q', project_name: 'Robotic Gripper Joint', name: 'gripper_joint.stl', original_filename: 'gripper_joint.stl', creator_user_id: currentUser?.user_id || 'OWN-DEMO-0001', creator_name: currentUser?.full_name || 'Jane Doe', status: 'verified', integrity_score: 98.6, vertex_count: 3200, face_count: 6400, file_format: 'stl', created_at: new Date(Date.now() - 86400000 * 4).toISOString() },
-    ]
+  if (live) {
+    try {
+      const { data } = await api.get('/api/models/my-projects')
+      return data || []
+    } catch (_) {}
   }
-  const { data } = await api.get('/api/models/my-projects')
-  return data
+  const currentUser = getUser()
+  if (currentUser) {
+    try {
+      const { data } = await supabase
+        .from('models')
+        .select('*')
+        .or(`creator_user_id.eq.${currentUser.user_id},owner_id.eq.${currentUser.owner_id}`)
+        .order('created_at', { ascending: false })
+      if (data && data.length > 0) return data
+    } catch (_) {}
+  }
+  return []
 }
 
 export async function verifyProjectById(projectId) {
@@ -475,51 +484,98 @@ export async function verifyModel(file, modelId = null) {
 
 export async function getModels() {
   const live = await checkBackend()
-  if (!live) return [
-    { id: 'demo-1', project_id: 'PRJ-BRKT-2024', project_name: 'Demo Bracket', name: 'demo_bracket.stl', original_filename: 'bracket.stl', owner_id: 'OWN-A7B2-K9F3', creator_user_id: 'OWN-A7B2-K9F3', creator_name: 'Jane Doe', designer_name: 'Jane Doe', status: 'watermarked', integrity_score: 99.8, distortion_percentage: 0.08, vertex_count: 2847, face_count: 5690, file_format: 'stl', created_at: new Date(Date.now() - 86400000 * 2).toISOString() },
-    { id: 'demo-2', project_id: 'PRJ-GEAR-2024', project_name: 'Planetary Gear Unit', name: 'demo_gear.stl', original_filename: 'gear.stl', owner_id: 'OWN-B4C1-L8G2', creator_user_id: 'OWN-B4C1-L8G2', creator_name: 'John Smith', designer_name: 'John Smith', status: 'verified', integrity_score: 98.5, distortion_percentage: 0.12, vertex_count: 5124, face_count: 10244, file_format: 'stl', created_at: new Date(Date.now() - 86400000).toISOString() },
-    { id: 'demo-3', project_id: 'PRJ-HOUS-2024', project_name: 'Chassis Housing', name: 'demo_housing.stl', original_filename: 'housing.stl', owner_id: 'OWN-C5D3-M7H1', creator_user_id: 'OWN-C5D3-M7H1', creator_name: 'Alice Chen', designer_name: 'Alice Chen', status: 'watermarked', integrity_score: 99.2, distortion_percentage: 0.05, vertex_count: 3608, face_count: 7212, file_format: 'stl', created_at: new Date().toISOString() },
-  ]
-  const { data } = await api.get('/api/models/')
-  return data
+  if (live) {
+    try {
+      const { data } = await api.get('/api/models/')
+      return data || []
+    } catch (_) {}
+  }
+  try {
+    const { data } = await supabase.from('models').select('*').order('created_at', { ascending: false }).limit(20)
+    if (data && data.length > 0) return data
+  } catch (_) {}
+  return []
 }
 
 export async function getModel(id) {
   const live = await checkBackend()
-  if (!live) {
-    const list = await getModels()
-    return list.find(m => m.id === id) || list[0]
+  if (live) {
+    try {
+      const { data } = await api.get(`/api/models/${id}`)
+      return data
+    } catch (_) {}
   }
-  const { data } = await api.get(`/api/models/${id}`)
-  return data
+  try {
+    const { data } = await supabase.from('models').select('*').eq('id', id).maybeSingle()
+    if (data) return data
+  } catch (_) {}
+  return null
 }
 
 export async function deleteModel(id) {
   const live = await checkBackend()
-  if (!live) { await delay(400); return { message: 'Deleted (Demo)' } }
-  const { data } = await api.delete(`/api/models/${id}`)
-  return data
+  if (live) {
+    const { data } = await api.delete(`/api/models/${id}`)
+    return data
+  }
+  try {
+    await supabase.from('models').delete().eq('id', id)
+    return { message: 'Deleted' }
+  } catch (err) {
+    throw err
+  }
 }
 
 export async function getDashboardStats() {
+  // Try backend first
   const live = await checkBackend()
-  if (!live) return { total_models: 47, watermarks_embedded: 39, verified: 31, tampered: 3, avg_integrity: 98.7, verification_rate: 65.96 }
-  const { data } = await api.get('/api/models/dashboard/stats')
-  return data
+  if (live) {
+    try {
+      const { data } = await api.get('/api/models/dashboard/stats')
+      return data
+    } catch (_) {}
+  }
+
+  // Fallback: query Supabase for real counts
+  const stats = { total_models: 0, watermarks_embedded: 0, verified: 0, tampered: 0, avg_integrity: 0, verification_rate: 0 }
+  try {
+    const { count: modelCount } = await supabase.from('models').select('*', { count: 'exact', head: true })
+    if (modelCount !== null) stats.total_models = modelCount
+
+    const { count: wmCount } = await supabase.from('models').select('*', { count: 'exact', head: true }).eq('status', 'watermarked')
+    if (wmCount !== null) stats.watermarks_embedded = wmCount
+
+    const { count: vCount } = await supabase.from('models').select('*', { count: 'exact', head: true }).eq('status', 'verified')
+    if (vCount !== null) stats.verified = vCount
+
+    const { count: tCount } = await supabase.from('models').select('*', { count: 'exact', head: true }).eq('status', 'tampered')
+    if (tCount !== null) stats.tampered = tCount
+
+    const { data: integrityData } = await supabase.from('models').select('integrity_score').not('integrity_score', 'is', null)
+    if (integrityData?.length > 0) {
+      stats.avg_integrity = integrityData.reduce((sum, r) => sum + (r.integrity_score || 0), 0) / integrityData.length
+    }
+
+    if (stats.total_models > 0) {
+      stats.verification_rate = ((stats.verified / stats.total_models) * 100)
+    }
+  } catch (_) {}
+  return stats
 }
 
 export async function getVerificationHistory() {
   const live = await checkBackend()
-  if (!live) return Array.from({ length: 8 }, (_, i) => ({
-    id: `vh-${i}`, verified_filename: ['bracket.stl','gear.stl','housing.stl'][i%3],
-    is_authenticated: i%4!==3, is_tampered: i%4===3,
-    owner_id_found: ['OWN-A7B2-K9F3','OWN-B4C1-L8G2','OWN-C5D3-M7H1'][i%3],
-    integrity_score: i%4===3 ? 72.3 : 97 + Math.random()*2.5,
-    confidence_score: i%4===3 ? 65.1 : 96 + Math.random()*3,
-    verified_at: new Date(Date.now() - i*3600000).toISOString()
-  }))
-  const { data } = await api.get('/api/verification/history')
-  return data
+  if (live) {
+    try {
+      const { data } = await api.get('/api/verification/history')
+      return data || []
+    } catch (_) {}
+  }
+  try {
+    const { data } = await supabase.from('verifications').select('*').order('verified_at', { ascending: false }).limit(20)
+    if (data && data.length > 0) return data
+  } catch (_) {}
+  return []
 }
 
 export async function getAnalytics(modelId) {

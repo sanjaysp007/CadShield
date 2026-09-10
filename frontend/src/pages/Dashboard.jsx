@@ -12,8 +12,9 @@ import {
   LineElement, BarElement, ArcElement, Tooltip, Legend, Filler
 } from 'chart.js'
 import { Line, Doughnut, Bar } from 'react-chartjs-2'
-import { getDashboardStats, getModels, getMyProjects, downloadWatermarkedModel, getAssetUrl } from '../utils/api'
+import { getDashboardStats, getModels, getMyProjects, getVerificationHistory, downloadWatermarkedModel, getAssetUrl } from '../utils/api'
 import { getUser, logout } from '../utils/auth'
+import { supabase } from '../utils/supabase'
 import { format } from 'date-fns'
 import toast from 'react-hot-toast'
 import GlassCard from '../components/GlassCard'
@@ -80,19 +81,39 @@ function StatCard({ title, value, icon: Icon, color, suffix = '', decimal = 0 })
   )
 }
 
-function buildLineData() {
+function buildLineData(records = []) {
   const days = 14
   const labels = Array.from({ length: days }, (_, i) => {
     const d = new Date()
     d.setDate(d.getDate() - (days - 1 - i))
     return `${d.getMonth() + 1}/${d.getDate()}`
   })
+
+  // Count real verifications and tampering per day from verification records
+  const verificationsPerDay = new Array(days).fill(0)
+  const tamperingPerDay = new Array(days).fill(0)
+
+  if (Array.isArray(records) && records.length > 0) {
+    records.forEach(r => {
+      if (!r.verified_at) return
+      const rDate = new Date(r.verified_at)
+      const diffDays = Math.floor((Date.now() - rDate.getTime()) / (1000 * 60 * 60 * 24))
+      if (diffDays >= 0 && diffDays < days) {
+        const idx = days - 1 - diffDays
+        if (idx >= 0 && idx < days) {
+          verificationsPerDay[idx] += 1
+          if (r.is_tampered) tamperingPerDay[idx] += 1
+        }
+      }
+    })
+  }
+
   return {
     labels,
     datasets: [
       {
         label: 'Verifications',
-        data: labels.map((_, i) => Math.floor(Math.sin(i / 2) * 6 + 10 + Math.random() * 4)),
+        data: verificationsPerDay,
         borderColor: '#00e5ff',
         backgroundColor: 'rgba(0,229,255,0.05)',
         tension: 0.45, fill: true, pointRadius: 3,
@@ -100,7 +121,7 @@ function buildLineData() {
       },
       {
         label: 'Tampering',
-        data: labels.map(() => Math.random() < 0.25 ? Math.floor(Math.random() * 3) : 0),
+        data: tamperingPerDay,
         borderColor: '#f43f5e',
         backgroundColor: 'rgba(244,63,94,0.05)',
         tension: 0.45, fill: true, pointRadius: 3,
@@ -116,7 +137,7 @@ export default function Dashboard() {
   const [models, setModels] = useState([])
   const [myProjects, setMyProjects] = useState([])
   const [refreshing, setRefreshing] = useState(false)
-  const [lineData, setLineData] = useState(buildLineData())
+  const [lineData, setLineData] = useState(() => buildLineData([]))
   const [user, setUser] = useState(() => getUser() || {})
   const [menuOpen, setMenuOpen] = useState(false)
   const [copied, setCopied] = useState(false)
@@ -131,21 +152,36 @@ export default function Dashboard() {
 
   const load = async () => {
     try {
-      const [s, m, p] = await Promise.all([
+      const [s, m, p, v] = await Promise.all([
         getDashboardStats(),
         getModels(),
         getMyProjects(),
+        getVerificationHistory(),
       ])
       setStats(s)
       setModels(m.slice(0, 5))
       setMyProjects(p || [])
-      setLineData(buildLineData())
+      setLineData(buildLineData(v || []))
     } finally {
       setRefreshing(false)
     }
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => {
+    load()
+
+    // ── Realtime subscription to Supabase changes ─────────────
+    const channel = supabase
+      .channel('dashboard-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'models' }, () => load())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => load())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'verifications' }, () => load())
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [])
 
   const copyId = () => {
     const id = user.user_id || user.owner_id || ''
@@ -157,24 +193,20 @@ export default function Dashboard() {
     }
   }
 
-  const donutData = {
-    labels: ['Authenticated', 'Modified', 'Unknown'],
-    datasets: [{
-      data: [stats?.verified ?? 31, 4, Math.max(0, (stats?.total_models ?? 47) - (stats?.verified ?? 31) - 4)],
-      backgroundColor: ['rgba(34,197,94,0.8)', 'rgba(245,158,11,0.7)', 'rgba(74,85,104,0.5)'],
-      borderColor: ['#22c55e', '#f59e0b', '#374151'],
-      borderWidth: 1, hoverOffset: 6,
-    }],
-  }
+  const verifiedCount = stats?.verified ?? 0
+  const tamperedCount = stats?.tampered ?? 0
+  const totalCount = stats?.total_models ?? 0
+  const otherCount = Math.max(0, totalCount - verifiedCount - tamperedCount)
 
-  const barData = {
-    labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+  const donutData = {
+    labels: ['Authenticated', 'Tampered', 'Uploaded'],
     datasets: [{
-      label: 'Processed',
-      data: [4, 7, 5, 9, 12, 3, 6],
-      backgroundColor: 'rgba(139,92,246,0.4)',
-      borderColor: '#8b5cf6', borderWidth: 1,
-      borderRadius: 6, borderSkipped: false,
+      data: (totalCount === 0 && verifiedCount === 0 && tamperedCount === 0)
+        ? [0, 0, 0]
+        : [verifiedCount, tamperedCount, otherCount],
+      backgroundColor: ['rgba(34,197,94,0.8)', 'rgba(244,63,94,0.8)', 'rgba(0,229,255,0.7)'],
+      borderColor: ['#22c55e', '#f43f5e', '#00e5ff'],
+      borderWidth: 1, hoverOffset: 6,
     }],
   }
 
@@ -443,12 +475,12 @@ export default function Dashboard() {
           {/* Stats bento */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', gap: 14, marginBottom: 20 }}
                className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6">
-            <StatCard title="Protected"  value={stats?.total_models ?? 47}        icon={Shield}        color="cyan"   />
-            <StatCard title="Watermarked" value={stats?.watermarks_embedded ?? 39} icon={Fingerprint}   color="purple" />
-            <StatCard title="Verified"   value={stats?.verified ?? 31}            icon={CheckCircle}   color="green"  />
-            <StatCard title="Tampered"   value={stats?.tampered ?? 3}             icon={AlertTriangle} color="red"    />
-            <StatCard title="Avg Integrity" value={stats?.avg_integrity ?? 98.7}  icon={Activity}      color="amber"  suffix="%" decimal={1} />
-            <StatCard title="Verify Rate" value={stats?.verification_rate ?? 65.9} icon={Percent}      color="blue"   suffix="%" decimal={1} />
+            <StatCard title="Protected"   value={stats?.total_models ?? 0}        icon={Shield}        color="cyan"   />
+            <StatCard title="Watermarked" value={stats?.watermarks_embedded ?? 0} icon={Fingerprint}   color="purple" />
+            <StatCard title="Verified"    value={stats?.verified ?? 0}            icon={CheckCircle}   color="green"  />
+            <StatCard title="Tampered"    value={stats?.tampered ?? 0}            icon={AlertTriangle} color="red"    />
+            <StatCard title="Avg Integrity" value={stats?.avg_integrity ?? 0}     icon={Activity}      color="amber"  suffix="%" decimal={1} />
+            <StatCard title="Verify Rate" value={stats?.verification_rate ?? 0}   icon={Percent}      color="blue"   suffix="%" decimal={1} />
           </div>
 
           {/* Charts row 1 */}
