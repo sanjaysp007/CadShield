@@ -180,6 +180,11 @@ export async function initSupabaseSession() {
 
     // Subscribe to auth state changes
     supabase.auth.onAuthStateChange(async (event, session) => {
+      // During password recovery, do not establish normal login session until password is set
+      if (event === 'PASSWORD_RECOVERY') {
+        return
+      }
+
       if (session?.user) {
         const supaUser = session.user
         const meta = supaUser.user_metadata || {}

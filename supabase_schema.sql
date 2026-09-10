@@ -161,3 +161,55 @@ CREATE TRIGGER on_auth_user_created
 -- SET role = 'admin'
 -- WHERE email = 'YOUR_EMAIL@EXAMPLE.COM';
 -- ==============================================================================
+
+-- ==============================================================================
+-- 9. SUPABASE EMAIL OTP TEMPLATES CONFIGURATION (NO CLICKABLE / MAGIC LINKS)
+--
+-- In your Supabase Dashboard:
+-- Go to: Authentication -> Email Templates
+--
+-- A) "Confirm signup" Template:
+--    Subject: {{ .Token }} is your CADShield verification code
+--    Body (HTML):
+--    -------------------------------------------------------------------------
+--    <div style="font-family: Arial, sans-serif; background-color: #04060f; color: #f0f4ff; padding: 40px 20px; text-align: center;">
+--      <div style="max-width: 480px; margin: 0 auto; background: #0b0f1e; border: 1px solid rgba(0, 229, 255, 0.3); border-radius: 20px; padding: 32px;">
+--        <h1 style="color: #00e5ff; font-size: 24px; margin-bottom: 8px;">CADShield</h1>
+--        <h2 style="font-size: 18px; color: #f0f4ff; margin-bottom: 16px;">Verify Your Email Address</h2>
+--        <p style="color: #8892a4; font-size: 14px; line-height: 1.5; margin-bottom: 24px;">
+--          Enter this 6-digit verification code to complete your CADShield registration:
+--        </p>
+--        <div style="background: rgba(0, 229, 255, 0.08); border: 2px dashed #00e5ff; border-radius: 12px; padding: 18px; margin-bottom: 24px;">
+--          <span style="font-family: 'Courier New', monospace; font-size: 32px; font-weight: bold; letter-spacing: 8px; color: #00e5ff;">{{ .Token }}</span>
+--        </div>
+--        <p style="color: #6b7a8d; font-size: 12px; margin: 0;">
+--          This code expires in 10 minutes. Do not share this code with anyone.
+--        </p>
+--      </div>
+--    </div>
+--    -------------------------------------------------------------------------
+--
+-- B) "Reset Password" Template:
+--    Subject: {{ .Token }} is your CADShield password reset code
+--    Body (HTML):
+--    -------------------------------------------------------------------------
+--    <div style="font-family: Arial, sans-serif; background-color: #04060f; color: #f0f4ff; padding: 40px 20px; text-align: center;">
+--      <div style="max-width: 480px; margin: 0 auto; background: #0b0f1e; border: 1px solid rgba(139, 92, 246, 0.3); border-radius: 20px; padding: 32px;">
+--        <h1 style="color: #00e5ff; font-size: 24px; margin-bottom: 8px;">CADShield</h1>
+--        <h2 style="font-size: 18px; color: #f0f4ff; margin-bottom: 16px;">Reset Your Password</h2>
+--        <p style="color: #8892a4; font-size: 14px; line-height: 1.5; margin-bottom: 24px;">
+--          Enter this 6-digit verification code to reset your CADShield password:
+--        </p>
+--        <div style="background: rgba(139, 92, 246, 0.08); border: 2px dashed #a78bfa; border-radius: 12px; padding: 18px; margin-bottom: 24px;">
+--          <span style="font-family: 'Courier New', monospace; font-size: 32px; font-weight: bold; letter-spacing: 8px; color: #a78bfa;">{{ .Token }}</span>
+--        </div>
+--        <p style="color: #6b7a8d; font-size: 12px; margin: 0;">
+--          This code expires in 10 minutes. If you did not request this, please ignore this email.
+--        </p>
+--      </div>
+--    </div>
+--    -------------------------------------------------------------------------
+--
+-- IMPORTANT: Make sure there are NO "{{ .ConfirmationURL }}" tags in the templates above!
+-- Using "{{ .Token }}" sends strictly the 6-digit OTP code with NO magic/clickable links.
+-- ==============================================================================

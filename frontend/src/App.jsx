@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { AnimatePresence } from 'framer-motion'
 import { Toaster } from 'react-hot-toast'
@@ -66,8 +66,11 @@ function AppRoutes() {
 }
 
 export default function App() {
+  const initRef = useRef(false)
   useEffect(() => {
     // Restore and synchronize Supabase authentication session on app initialization
+    if (initRef.current) return
+    initRef.current = true
     initSupabaseSession()
   }, [])
 

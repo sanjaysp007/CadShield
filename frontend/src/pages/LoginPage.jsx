@@ -7,8 +7,8 @@ import {
   KeyRound, RefreshCw, ArrowLeft, ShieldCheck
 } from 'lucide-react'
 import toast from 'react-hot-toast'
-import { login, signup } from '../utils/api'
-import { isLoggedIn } from '../utils/auth'
+import { login, signup, verifySignupOtp, verifyRecoveryOtp } from '../utils/api'
+import { isLoggedIn, clearAuth } from '../utils/auth'
 import { supabase } from '../utils/supabase'
 
 /* ── Floating Orbs Background ──────────────────────── */
@@ -66,26 +66,38 @@ function AuthField({ id, label, type = 'text', value, onChange, placeholder, ico
 }
 
 /* ── 6-Digit OTP Input Component ───────────────────── */
-function OtpInput({ value, onChange, disabled }) {
+function OtpInput({ value = '', onChange, disabled }) {
   const refs = useRef([])
-  const digits = (value || '').padEnd(6, '').split('').slice(0, 6)
+  const chars = (value || '').replace(/\D/g, '').slice(0, 6).split('')
 
   const handleKey = (i, e) => {
     if (e.key === 'Backspace') {
-      const next = [...digits]
-      if (next[i]) { next[i] = ''; onChange(next.join('').trimEnd()) }
-      else if (i > 0) { refs.current[i - 1]?.focus(); next[i - 1] = ''; onChange(next.join('').trimEnd()) }
-    } else if (e.key === 'ArrowLeft' && i > 0) refs.current[i - 1]?.focus()
-    else if (e.key === 'ArrowRight' && i < 5) refs.current[i + 1]?.focus()
+      e.preventDefault()
+      const currentDigits = (value || '').replace(/\D/g, '').split('')
+      if (currentDigits[i]) {
+        currentDigits[i] = ''
+      } else if (i > 0) {
+        currentDigits[i - 1] = ''
+        refs.current[i - 1]?.focus()
+      }
+      onChange(currentDigits.join(''))
+    } else if (e.key === 'ArrowLeft' && i > 0) {
+      refs.current[i - 1]?.focus()
+    } else if (e.key === 'ArrowRight' && i < 5) {
+      refs.current[i + 1]?.focus()
+    }
   }
 
   const handleChange = (i, char) => {
-    const cleaned = char.replace(/\D/g, '').slice(-1)
-    const next = [...digits]
-    next[i] = cleaned
-    const newVal = next.join('')
-    onChange(newVal)
-    if (cleaned && i < 5) refs.current[i + 1]?.focus()
+    const digit = char.replace(/\D/g, '').slice(-1)
+    if (!digit) return
+    const current = (value || '').replace(/\D/g, '').padEnd(6, ' ').split('')
+    current[i] = digit
+    const updated = current.join('').trimEnd()
+    onChange(updated)
+    if (i < 5) {
+      refs.current[i + 1]?.focus()
+    }
   }
 
   const handlePaste = (e) => {
@@ -100,31 +112,37 @@ function OtpInput({ value, onChange, disabled }) {
 
   return (
     <div style={{ display: 'flex', gap: 8, justifyContent: 'center', margin: '20px 0' }}>
-      {[0, 1, 2, 3, 4, 5].map((i) => (
-        <input
-          key={i}
-          ref={el => (refs.current[i] = el)}
-          type="text"
-          inputMode="numeric"
-          maxLength={1}
-          value={digits[i] || ''}
-          disabled={disabled}
-          onChange={e => handleChange(i, e.target.value)}
-          onKeyDown={e => handleKey(i, e)}
-          onPaste={handlePaste}
-          style={{
-            width: 44, height: 50, textAlign: 'center',
-            fontFamily: "'Space Grotesk', monospace", fontSize: '1.3rem', fontWeight: 700,
-            color: '#00e5ff',
-            background: 'rgba(255,255,255,0.03)',
-            border: digits[i] ? '1px solid rgba(0,229,255,0.5)' : '1px solid rgba(255,255,255,0.1)',
-            borderRadius: 12, outline: 'none', transition: 'border-color 0.2s',
-            boxShadow: digits[i] ? '0 0 10px rgba(0,229,255,0.15)' : 'none',
-          }}
-          onFocus={e => { e.target.style.borderColor = 'rgba(0,229,255,0.6)' }}
-          onBlur={e => { e.target.style.borderColor = digits[i] ? 'rgba(0,229,255,0.5)' : 'rgba(255,255,255,0.1)' }}
-        />
-      ))}
+      {[0, 1, 2, 3, 4, 5].map((i) => {
+        const val = chars[i] || ''
+        return (
+          <input
+            key={i}
+            ref={el => (refs.current[i] = el)}
+            type="text"
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            maxLength={1}
+            value={val}
+            disabled={disabled}
+            onChange={e => handleChange(i, e.target.value)}
+            onKeyDown={e => handleKey(i, e)}
+            onPaste={handlePaste}
+            style={{
+              width: 44, height: 52, textAlign: 'center',
+              fontFamily: "'Space Grotesk', monospace", fontSize: '1.4rem', fontWeight: 700,
+              color: '#00e5ff',
+              background: 'rgba(255,255,255,0.03)',
+              border: val ? '1.5px solid rgba(0,229,255,0.6)' : '1px solid rgba(255,255,255,0.1)',
+              borderRadius: 12, outline: 'none', transition: 'all 0.2s',
+              boxShadow: val ? '0 0 12px rgba(0,229,255,0.2)' : 'none',
+              boxSizing: 'border-box',
+              cursor: disabled ? 'not-allowed' : 'text',
+            }}
+            onFocus={e => { e.target.style.borderColor = 'rgba(0,229,255,0.8)'; e.target.style.boxShadow = '0 0 16px rgba(0,229,255,0.25)' }}
+            onBlur={e => { e.target.style.borderColor = val ? 'rgba(0,229,255,0.6)' : 'rgba(255,255,255,0.1)'; e.target.style.boxShadow = val ? '0 0 12px rgba(0,229,255,0.2)' : 'none' }}
+          />
+        )
+      })}
     </div>
   )
 }
@@ -192,6 +210,11 @@ export default function LoginPage() {
   // OTP resend countdown
   const [resendCooldown, setResendCooldown] = useState(0)
 
+  // Anti-duplicate synchronous request guard
+  const isActionInFlightRef = useRef(false)
+  const pendingEmailRef = useRef(typeof window !== 'undefined' ? (sessionStorage.getItem('cadshield_pending_email') || '') : '')
+  const pendingOwnerIdRef = useRef(typeof window !== 'undefined' ? (sessionStorage.getItem('cadshield_pending_owner_id') || '') : '')
+
   useEffect(() => {
     document.title = 'Login – CADShield'
     if (isLoggedIn()) navigate('/dashboard', { replace: true })
@@ -200,7 +223,7 @@ export default function LoginPage() {
   // Countdown timer for resending OTP
   useEffect(() => {
     if (resendCooldown <= 0) return
-    const timer = setInterval(() => setResendCooldown(c => c - 1), 1000)
+    const timer = setInterval(() => setResendCooldown(c => (c <= 1 ? 0 : c - 1)), 1000)
     return () => clearInterval(timer)
   }, [resendCooldown])
 
@@ -225,33 +248,41 @@ export default function LoginPage() {
     return !Object.keys(e).length
   }
 
-  // Handle Login & Signup initial submit
+  // Handle Login & Signup initial submit (Strictly single-request guarded)
   const handleAuthSubmit = async (e) => {
     e.preventDefault()
     if (!validate()) return
+    if (isActionInFlightRef.current) return
+    isActionInFlightRef.current = true
     setLoading(true)
+
+    const cleanEmail = email.trim().toLowerCase()
     try {
       if (mode === 'login') {
-        await login(email, password)
+        await login(cleanEmail, password)
         toast.success('Welcome back!')
         navigate('/dashboard')
       } else if (mode === 'signup') {
-        const res = await signup(email, password, name, org || undefined)
-        // If email confirmation / OTP is required by Supabase
+        const res = await signup(cleanEmail, password, name, org || undefined)
+        pendingEmailRef.current = cleanEmail
+        pendingOwnerIdRef.current = res.owner_id
+        sessionStorage.setItem('cadshield_pending_email', cleanEmail)
+        sessionStorage.setItem('cadshield_pending_owner_id', res.owner_id)
+
         if (res.needsEmailConfirmation) {
-          toast.success('Verification code sent to your email!')
+          toast.success('6-digit verification code sent to your email!')
           setMode('otp')
+          setOtp('')
           setResendCooldown(60)
         } else {
-          // Direct login or auto-confirmed
           toast.success('Account created successfully!')
-          setNewOwner(res.user.owner_id)
+          setNewOwner(res.owner_id)
         }
       }
     } catch (err) {
-      const msg = err?.message || err?.response?.data?.detail || 'Something went wrong'
-      toast.error(msg)
+      toast.error(err?.message || 'Something went wrong')
     } finally {
+      isActionInFlightRef.current = false
       setLoading(false)
     }
   }
@@ -259,35 +290,37 @@ export default function LoginPage() {
   // Handle OTP Verification for Registration
   const handleOtpVerify = async (e) => {
     e.preventDefault()
-    if (!otp || otp.length < 6) {
-      setErrors({ otp: 'Please enter a 6-digit code' })
+    const cleanOtp = String(otp || '').replace(/\D/g, '')
+    if (cleanOtp.length !== 6) {
+      setErrors({ otp: 'Please enter the complete 6-digit code' })
       return
     }
-    setLoading(true)
-    try {
-      const { data, error } = await supabase.auth.verifyOtp({
-        email: email.trim().toLowerCase(),
-        token: otp.trim(),
-        type: 'signup',
-      })
-      if (error) {
-        // Also try 'email' type if 'signup' fails
-        const { data: emailData, error: emailErr } = await supabase.auth.verifyOtp({
-          email: email.trim().toLowerCase(),
-          token: otp.trim(),
-          type: 'email',
-        })
-        if (emailErr) throw emailErr
-      }
+    const targetEmail = (email || pendingEmailRef.current || sessionStorage.getItem('cadshield_pending_email') || '').trim().toLowerCase()
+    if (!targetEmail) {
+      setErrors({ otp: 'Email is missing. Please return to registration.' })
+      return
+    }
 
+    if (isActionInFlightRef.current) return
+    isActionInFlightRef.current = true
+    setLoading(true)
+    setErrors({})
+
+    try {
+      const res = await verifySignupOtp(targetEmail, cleanOtp, {
+        owner_id: pendingOwnerIdRef.current || sessionStorage.getItem('cadshield_pending_owner_id'),
+        name: name.trim(),
+        org: org.trim(),
+      })
+      sessionStorage.removeItem('cadshield_pending_email')
+      sessionStorage.removeItem('cadshield_pending_owner_id')
       toast.success('Email verified successfully!')
-      // Refresh session
-      const { data: { session } } = await supabase.auth.getSession()
-      const ownerId = session?.user?.user_metadata?.owner_id || session?.user?.user_metadata?.user_id || 'OWN-AUTHENTICATED'
-      setNewOwner(ownerId)
+      setNewOwner(res.owner_id)
     } catch (err) {
-      toast.error(err?.message || 'Invalid or expired OTP code. Please try again.')
+      setErrors({ otp: err?.message || 'Invalid or expired verification code.' })
+      toast.error(err?.message || 'Verification failed.')
     } finally {
+      isActionInFlightRef.current = false
       setLoading(false)
     }
   }
@@ -296,16 +329,25 @@ export default function LoginPage() {
   const handleForgotSubmit = async (e) => {
     e.preventDefault()
     if (!validate()) return
+    if (isActionInFlightRef.current) return
+    isActionInFlightRef.current = true
     setLoading(true)
+
+    const cleanEmail = email.trim().toLowerCase()
+    pendingEmailRef.current = cleanEmail
+    sessionStorage.setItem('cadshield_pending_email', cleanEmail)
+
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase())
+      const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail)
       if (error) throw error
-      toast.success('Reset code sent! Check your email.')
+      toast.success('6-digit reset code sent to your email!')
       setMode('forgot-otp')
+      setOtp('')
       setResendCooldown(60)
     } catch (err) {
-      toast.error(err?.message || 'Could not send reset code. Please check the email.')
+      toast.error(err?.message || 'Could not send reset code. Please check your email.')
     } finally {
+      isActionInFlightRef.current = false
       setLoading(false)
     }
   }
@@ -313,23 +355,32 @@ export default function LoginPage() {
   // Handle Forgot Password - Step 2: Verify OTP
   const handleForgotOtpVerify = async (e) => {
     e.preventDefault()
-    if (!otp || otp.length < 6) {
-      setErrors({ otp: 'Please enter a 6-digit code' })
+    const cleanOtp = String(otp || '').replace(/\D/g, '')
+    if (cleanOtp.length !== 6) {
+      setErrors({ otp: 'Please enter the complete 6-digit code' })
       return
     }
+    const targetEmail = (email || pendingEmailRef.current || sessionStorage.getItem('cadshield_pending_email') || '').trim().toLowerCase()
+    if (!targetEmail) {
+      setErrors({ otp: 'Email is missing. Please restart password reset.' })
+      return
+    }
+
+    if (isActionInFlightRef.current) return
+    isActionInFlightRef.current = true
     setLoading(true)
+    setErrors({})
+
     try {
-      const { data, error } = await supabase.auth.verifyOtp({
-        email: email.trim().toLowerCase(),
-        token: otp.trim(),
-        type: 'recovery',
-      })
-      if (error) throw error
+      await verifyRecoveryOtp(targetEmail, cleanOtp)
       toast.success('Code verified! Enter your new password.')
       setMode('reset-password')
+      setOtp('')
     } catch (err) {
-      toast.error(err?.message || 'Invalid or expired reset code.')
+      setErrors({ otp: err?.message || 'Invalid or expired reset code.' })
+      toast.error(err?.message || 'Verification failed.')
     } finally {
+      isActionInFlightRef.current = false
       setLoading(false)
     }
   }
@@ -338,41 +389,62 @@ export default function LoginPage() {
   const handleResetPassword = async (e) => {
     e.preventDefault()
     if (!validate()) return
+    if (isActionInFlightRef.current) return
+    isActionInFlightRef.current = true
     setLoading(true)
+
     try {
       const { error } = await supabase.auth.updateUser({
         password: newPassword,
       })
       if (error) throw error
-      toast.success('Password updated! You can now log in.')
-      setMode('login')
-      setPassword('')
+      await supabase.auth.signOut()
+      clearAuth()
+      sessionStorage.removeItem('cadshield_pending_email')
+      sessionStorage.removeItem('cadshield_pending_owner_id')
+      toast.success('Password updated successfully! Please sign in with your new password.', { duration: 5000 })
+      switchMode('login')
     } catch (err) {
       toast.error(err?.message || 'Failed to update password.')
     } finally {
+      isActionInFlightRef.current = false
       setLoading(false)
     }
   }
 
-  // Resend OTP
+  // Resend OTP (Strictly single-request guarded with 60-second cooldown)
   const handleResendOtp = async (type) => {
-    if (resendCooldown > 0) return
+    if (resendCooldown > 0 || isActionInFlightRef.current) return
+    isActionInFlightRef.current = true
+    setResendCooldown(60) // Immediately lock button
+    setLoading(true)
+
+    const targetEmail = (email || pendingEmailRef.current || sessionStorage.getItem('cadshield_pending_email') || '').trim().toLowerCase()
+    if (!targetEmail) {
+      toast.error('Email address is missing.')
+      isActionInFlightRef.current = false
+      setLoading(false)
+      return
+    }
+
     try {
       if (type === 'signup') {
         const { error } = await supabase.auth.resend({
           type: 'signup',
-          email: email.trim().toLowerCase(),
+          email: targetEmail,
         })
         if (error) throw error
-        toast.success('New verification code sent!')
+        toast.success('New 6-digit verification code sent!')
       } else {
-        const { error } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase())
+        const { error } = await supabase.auth.resetPasswordForEmail(targetEmail)
         if (error) throw error
-        toast.success('New reset code sent!')
+        toast.success('New 6-digit reset code sent!')
       }
-      setResendCooldown(60)
     } catch (err) {
       toast.error(err?.message || 'Failed to resend code.')
+    } finally {
+      isActionInFlightRef.current = false
+      setLoading(false)
     }
   }
 
@@ -433,7 +505,7 @@ export default function LoginPage() {
                     Verify Your Email
                   </h2>
                   <p style={{ color: '#6b7a8d', fontSize: '0.82rem' }}>
-                    We sent a 6-digit code to <span style={{ color: '#00e5ff' }}>{email}</span>
+                    We sent a 6-digit code to <span style={{ color: '#00e5ff', fontWeight: 600 }}>{email || pendingEmailRef.current || 'your email'}</span>
                   </p>
                 </div>
 
@@ -441,11 +513,11 @@ export default function LoginPage() {
                   <OtpInput value={otp} onChange={setOtp} disabled={loading} />
                   {errors.otp && <p style={{ color: '#f43f5e', fontSize: '0.75rem', textAlign: 'center', marginBottom: 12 }}>{errors.otp}</p>}
 
-                  <button type="submit" disabled={loading || otp.length < 6} style={{
+                  <button type="submit" disabled={loading || (otp || '').replace(/\D/g, '').length < 6} style={{
                     width: '100%', padding: '14px', borderRadius: 14, marginTop: 12,
                     fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: '0.95rem',
-                    cursor: (loading || otp.length < 6) ? 'not-allowed' : 'pointer',
-                    opacity: (loading || otp.length < 6) ? 0.7 : 1,
+                    cursor: (loading || (otp || '').replace(/\D/g, '').length < 6) ? 'not-allowed' : 'pointer',
+                    opacity: (loading || (otp || '').replace(/\D/g, '').length < 6) ? 0.7 : 1,
                     background: 'linear-gradient(135deg, #00e5ff, #8b5cf6)', color: '#04060f', border: 'none',
                     display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
                     boxShadow: '0 0 24px rgba(0,229,255,0.2)',
@@ -458,13 +530,21 @@ export default function LoginPage() {
                   {resendCooldown > 0 ? (
                     <span>Resend code in <strong style={{ color: '#00e5ff' }}>{resendCooldown}s</strong></span>
                   ) : (
-                    <button onClick={() => handleResendOtp('signup')} style={{ background: 'none', border: 'none', color: '#00e5ff', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4, fontWeight: 600 }}>
+                    <button
+                      type="button"
+                      disabled={resendCooldown > 0 || loading}
+                      onClick={() => handleResendOtp('signup')}
+                      style={{
+                        background: 'none', border: 'none', color: loading ? '#4a5568' : '#00e5ff',
+                        cursor: loading ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4, fontWeight: 600
+                      }}
+                    >
                       <RefreshCw size={12} /> Resend OTP
                     </button>
                   )}
                 </div>
 
-                <button onClick={() => switchMode('signup')} style={{ width: '100%', background: 'none', border: 'none', color: '#6b7a8d', cursor: 'pointer', marginTop: 16, fontSize: '0.8rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+                <button type="button" onClick={() => switchMode('signup')} style={{ width: '100%', background: 'none', border: 'none', color: '#6b7a8d', cursor: 'pointer', marginTop: 16, fontSize: '0.8rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
                   <ArrowLeft size={13} /> Back to Registration
                 </button>
               </motion.div>
@@ -497,7 +577,7 @@ export default function LoginPage() {
                   </button>
                 </form>
 
-                <button onClick={() => switchMode('login')} style={{ width: '100%', background: 'none', border: 'none', color: '#6b7a8d', cursor: 'pointer', marginTop: 20, fontSize: '0.8rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+                <button type="button" onClick={() => switchMode('login')} style={{ width: '100%', background: 'none', border: 'none', color: '#6b7a8d', cursor: 'pointer', marginTop: 20, fontSize: '0.8rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
                   <ArrowLeft size={13} /> Back to Sign In
                 </button>
               </motion.div>
@@ -514,7 +594,7 @@ export default function LoginPage() {
                     Enter Reset Code
                   </h2>
                   <p style={{ color: '#6b7a8d', fontSize: '0.82rem' }}>
-                    Enter the code sent to <span style={{ color: '#00e5ff' }}>{email}</span>
+                    Enter the code sent to <span style={{ color: '#00e5ff', fontWeight: 600 }}>{email || pendingEmailRef.current || 'your email'}</span>
                   </p>
                 </div>
 
@@ -522,11 +602,11 @@ export default function LoginPage() {
                   <OtpInput value={otp} onChange={setOtp} disabled={loading} />
                   {errors.otp && <p style={{ color: '#f43f5e', fontSize: '0.75rem', textAlign: 'center', marginBottom: 12 }}>{errors.otp}</p>}
 
-                  <button type="submit" disabled={loading || otp.length < 6} style={{
+                  <button type="submit" disabled={loading || (otp || '').replace(/\D/g, '').length < 6} style={{
                     width: '100%', padding: '14px', borderRadius: 14, marginTop: 12,
                     fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: '0.95rem',
-                    cursor: (loading || otp.length < 6) ? 'not-allowed' : 'pointer',
-                    opacity: (loading || otp.length < 6) ? 0.7 : 1,
+                    cursor: (loading || (otp || '').replace(/\D/g, '').length < 6) ? 'not-allowed' : 'pointer',
+                    opacity: (loading || (otp || '').replace(/\D/g, '').length < 6) ? 0.7 : 1,
                     background: 'linear-gradient(135deg, #00e5ff, #8b5cf6)', color: '#04060f', border: 'none',
                     display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
                     boxShadow: '0 0 24px rgba(0,229,255,0.2)',
@@ -539,13 +619,21 @@ export default function LoginPage() {
                   {resendCooldown > 0 ? (
                     <span>Resend code in <strong style={{ color: '#00e5ff' }}>{resendCooldown}s</strong></span>
                   ) : (
-                    <button onClick={() => handleResendOtp('recovery')} style={{ background: 'none', border: 'none', color: '#00e5ff', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4, fontWeight: 600 }}>
+                    <button
+                      type="button"
+                      disabled={resendCooldown > 0 || loading}
+                      onClick={() => handleResendOtp('recovery')}
+                      style={{
+                        background: 'none', border: 'none', color: loading ? '#4a5568' : '#00e5ff',
+                        cursor: loading ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4, fontWeight: 600
+                      }}
+                    >
                       <RefreshCw size={12} /> Resend OTP
                     </button>
                   )}
                 </div>
 
-                <button onClick={() => switchMode('forgot')} style={{ width: '100%', background: 'none', border: 'none', color: '#6b7a8d', cursor: 'pointer', marginTop: 16, fontSize: '0.8rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+                <button type="button" onClick={() => switchMode('forgot')} style={{ width: '100%', background: 'none', border: 'none', color: '#6b7a8d', cursor: 'pointer', marginTop: 16, fontSize: '0.8rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
                   <ArrowLeft size={13} /> Back
                 </button>
               </motion.div>
