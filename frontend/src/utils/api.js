@@ -66,6 +66,30 @@ function formatAuthError(err) {
   return msg
 }
 
+/**
+ * Generate a unique, cryptographically random Owner ID in format: OWN-XXXX-XXXX
+ * Consistent across CADShield platform and stored in user profile & database.
+ */
+export function generateOwnerId() {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
+  let seg1 = ''
+  let seg2 = ''
+
+  if (typeof window !== 'undefined' && window.crypto && window.crypto.getRandomValues) {
+    const arr = new Uint8Array(8)
+    window.crypto.getRandomValues(arr)
+    for (let i = 0; i < 4; i++) seg1 += chars[arr[i] % chars.length]
+    for (let i = 4; i < 8; i++) seg2 += chars[arr[i] % chars.length]
+  } else {
+    for (let i = 0; i < 4; i++) seg1 += chars[Math.floor(Math.random() * chars.length)]
+    for (let i = 4; i < 8; i++) seg2 += chars[Math.floor(Math.random() * chars.length)]
+  }
+
+  return `OWN-${seg1}-${seg2}`
+}
+
+export const generateUserId = generateOwnerId
+
 // ── Auth API ──────────────────────────────────────────
 export async function signup(email, password, fullName, organization) {
   const owner_id = generateOwnerId()
