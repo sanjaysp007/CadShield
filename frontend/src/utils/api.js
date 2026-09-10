@@ -58,7 +58,7 @@ function formatAuthError(err) {
   if (!err) return 'Authentication failed'
   const msg = err.message || err.error_description || String(err)
   if (msg.includes('Invalid login credentials') || msg.includes('invalid_credentials')) {
-    return 'Invalid email/username or password. Please check your credentials and try again.'
+    return 'Invalid email/username or password. Note: For the admin account, username is Admin@123 (or mailtosanjaysp@gmail.com) and password is Password.info.'
   }
   if (msg.includes('User already registered') || msg.includes('already exists')) {
     return 'An account with this email address already exists. Please sign in instead.'
@@ -66,8 +66,8 @@ function formatAuthError(err) {
   if (msg.includes('Password should be at least 6 characters') || msg.includes('weak_password')) {
     return 'Password is too weak. Please use at least 6 characters.'
   }
-  if (msg.includes('Email not confirmed')) {
-    return 'Account created. To log in without email confirmation, toggle "Confirm email" OFF in Supabase Dashboard -> Authentication -> Providers -> Email, or confirm the user in Supabase.'
+  if (msg.includes('Email not confirmed') || msg.includes('email_not_confirmed')) {
+    return 'Email not confirmed in Supabase yet. In Supabase Dashboard -> Authentication -> Providers -> Email, toggle "Confirm email" to OFF, or run the SQL script in SQL Editor to confirm.'
   }
   return msg
 }
