@@ -8,8 +8,12 @@ const ACCEPTED = {
   'model/obj': ['.obj'],
   'model/x-ply': ['.ply'],
   'model/off': ['.off'],
-  'application/octet-stream': ['.stl', '.ply', '.off'],
+  'application/octet-stream': ['.stl', '.ply', '.off', '.obj'],
   'text/plain': ['.obj'],
+  'application/pdf': ['.pdf'],
+  'image/png': ['.png'],
+  'image/jpeg': ['.jpg', '.jpeg'],
+  'image/webp': ['.webp'],
 }
 
 function fmt(b) {
@@ -18,7 +22,17 @@ function fmt(b) {
   return `${(b/1048576).toFixed(2)} MB`
 }
 
-const EXT_COLOR = { stl: '#00e5ff', obj: '#8b5cf6', ply: '#22c55e', off: '#f59e0b' }
+const EXT_COLOR = {
+  stl: '#00e5ff',
+  obj: '#8b5cf6',
+  ply: '#22c55e',
+  off: '#f59e0b',
+  pdf: '#ef4444',
+  png: '#ec4899',
+  jpg: '#3b82f6',
+  jpeg: '#3b82f6',
+  webp: '#14b8a6',
+}
 
 export default function ModelUploader({ onFileAccepted, loading = false }) {
   const [file,  setFile]  = useState(null)
@@ -160,7 +174,7 @@ export default function ModelUploader({ onFileAccepted, loading = false }) {
                 <>
                   <div>
                     <p style={{ color: '#f0f4ff', fontWeight: 600, fontSize: '1rem', marginBottom: 6 }}>
-                      Drag & drop your 3D model
+                      Drag & drop your CAD model, PDF, or image
                     </p>
                     <p style={{ color: '#4a5568', fontSize: '0.85rem' }}>
                       or{' '}

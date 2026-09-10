@@ -217,7 +217,11 @@ export default function LoginPage() {
 
   useEffect(() => {
     document.title = 'Login – CADShield'
-    if (isLoggedIn()) navigate('/dashboard', { replace: true })
+    if (isLoggedIn()) {
+      const u = getUser()
+      if (u?.role === 'admin') navigate('/admin', { replace: true })
+      else navigate('/dashboard', { replace: true })
+    }
   }, [navigate])
 
   // Countdown timer for resending OTP
@@ -229,8 +233,12 @@ export default function LoginPage() {
 
   const validate = () => {
     const e = {}
-    if (!email.trim()) e.email = 'Email is required'
-    else if (!/\S+@\S+\.\S+/.test(email)) e.email = 'Enter a valid email'
+    if (mode === 'login') {
+      if (!email.trim()) e.email = 'Email or Username / Owner ID is required'
+    } else {
+      if (!email.trim()) e.email = 'Email is required'
+      else if (!/\S+@\S+\.\S+/.test(email)) e.email = 'Enter a valid email'
+    }
 
     if (mode === 'login' || mode === 'signup') {
       if (!password) e.password = 'Password is required'
@@ -259,9 +267,13 @@ export default function LoginPage() {
     const cleanEmail = email.trim().toLowerCase()
     try {
       if (mode === 'login') {
-        await login(cleanEmail, password)
+        const res = await login(email.trim(), password)
         toast.success('Welcome back!')
-        navigate('/dashboard')
+        if (res?.user?.role === 'admin') {
+          navigate('/admin')
+        } else {
+          navigate('/dashboard')
+        }
       } else if (mode === 'signup') {
         const res = await signup(cleanEmail, password, name, org || undefined)
         pendingEmailRef.current = cleanEmail
@@ -701,7 +713,7 @@ export default function LoginPage() {
                     )}
                   </AnimatePresence>
 
-                  <AuthField id="email" label="Email Address" type="email" value={email} onChange={v => { setEmail(v); setErrors(p=>({...p,email:''})) }} placeholder="you@example.com" icon={Mail} error={errors.email} autoComplete="email" />
+                  <AuthField id="email" label={mode === 'login' ? 'Email or Username / Owner ID' : 'Email Address'} type={mode === 'login' ? 'text' : 'email'} value={email} onChange={v => { setEmail(v); setErrors(p=>({...p,email:''})) }} placeholder={mode === 'login' ? 'you@example.com or OWN-XXXX-XXXX' : 'you@example.com'} icon={Mail} error={errors.email} autoComplete={mode === 'login' ? 'username' : 'email'} />
                   <AuthField id="pass"  label="Password" type="password" value={password} onChange={v => { setPassword(v); setErrors(p=>({...p,password:''})) }} placeholder={mode==='signup'?'Min. 6 characters':'••••••••'} icon={Lock} error={errors.password} autoComplete={mode==='login'?'current-password':'new-password'} />
 
                   {/* Forgot Password Link */}

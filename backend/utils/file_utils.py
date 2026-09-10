@@ -1,7 +1,7 @@
 import os
 import re
 
-ALLOWED_EXTENSIONS = {'stl', 'obj', 'ply', 'off'}
+ALLOWED_EXTENSIONS = {'stl', 'obj', 'ply', 'off', 'pdf', 'png', 'jpg', 'jpeg', 'webp'}
 MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB
 
 def validate_file(filename: str, file_size: int) -> tuple[bool, str]:

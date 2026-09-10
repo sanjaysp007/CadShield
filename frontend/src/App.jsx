@@ -16,7 +16,7 @@ import MyProjectsPage     from './pages/MyProjectsPage'
 import ProjectVerifyPage  from './pages/ProjectVerifyPage'
 import CreatorPage        from './pages/CreatorPage'
 import AdminDashboard     from './pages/AdminDashboard'
-import { isLoggedIn, initSupabaseSession } from './utils/auth'
+import { isLoggedIn, isAdmin, initSupabaseSession } from './utils/auth'
 
 // ── Protected route wrapper ───────────────────────────
 function Protected({ children }) {
@@ -29,6 +29,24 @@ function Protected({ children }) {
   }, [])
 
   return auth ? children : <Navigate to="/login" replace />
+}
+
+function AdminProtected({ children }) {
+  const [auth, setAuth] = useState(() => isLoggedIn())
+  const [admin, setAdmin] = useState(() => isAdmin())
+
+  useEffect(() => {
+    const handleAuthUpdate = () => {
+      setAuth(isLoggedIn())
+      setAdmin(isAdmin())
+    }
+    window.addEventListener('cadshield-user-updated', handleAuthUpdate)
+    return () => window.removeEventListener('cadshield-user-updated', handleAuthUpdate)
+  }, [])
+
+  if (!auth) return <Navigate to="/login" replace />
+  if (!admin) return <Navigate to="/dashboard" replace />
+  return children
 }
 
 function AppRoutes() {
@@ -48,7 +66,7 @@ function AppRoutes() {
 
           {/* Protected */}
           <Route path="/dashboard"    element={<Protected><Dashboard /></Protected>} />
-          <Route path="/admin"        element={<Protected><AdminDashboard /></Protected>} />
+          <Route path="/admin"        element={<AdminProtected><AdminDashboard /></AdminProtected>} />
           <Route path="/profile"      element={<Protected><ProfilePage /></Protected>} />
           <Route path="/my-projects"  element={<Protected><MyProjectsPage /></Protected>} />
           <Route path="/embed"        element={<Protected><EmbedPage /></Protected>} />
