@@ -57,23 +57,17 @@ const delay = ms => new Promise(r => setTimeout(r, ms))
 function formatAuthError(err) {
   if (!err) return 'Authentication failed'
   const msg = err.message || err.error_description || String(err)
-  if (msg.includes('Token has expired') || msg.includes('is invalid') || msg.includes('otp_expired')) {
-    return 'Invalid or expired 6-digit verification code. Please check the code or request a new one.'
-  }
-  if (msg.includes('rate limit') || msg.includes('over_email_send_rate_limit') || msg.includes('Too many requests')) {
-    return 'Email rate limit reached. Supabase default mailer is limited to 3 emails/hr. Please wait a few minutes, or enable Custom SMTP in Supabase Project Settings.'
+  if (msg.includes('Invalid login credentials') || msg.includes('invalid_credentials')) {
+    return 'Invalid email/username or password. Please check your credentials and try again.'
   }
   if (msg.includes('User already registered') || msg.includes('already exists')) {
     return 'An account with this email address already exists. Please sign in instead.'
-  }
-  if (msg.includes('Invalid login credentials') || msg.includes('invalid_credentials')) {
-    return 'Invalid email or password. Please check your credentials and try again.'
   }
   if (msg.includes('Password should be at least 6 characters') || msg.includes('weak_password')) {
     return 'Password is too weak. Please use at least 6 characters.'
   }
   if (msg.includes('Email not confirmed')) {
-    return 'Your email address has not been confirmed yet. Please verify your email with the 6-digit OTP code.'
+    return 'Account created. To log in without email confirmation, toggle "Confirm email" OFF in Supabase Dashboard -> Authentication -> Providers -> Email, or confirm the user in Supabase.'
   }
   return msg
 }
@@ -105,9 +99,9 @@ export const generateUserId = generateOwnerId
 // ── Auth API ──────────────────────────────────────────
 
 /**
- * Register account with Supabase Auth.
- * If email confirmation is enabled, Supabase generates and emails a 6-digit OTP code.
- * DOES NOT save fake tokens to localStorage if session is null.
+ * Register account with Supabase Auth (Email + Password only).
+ * Directly creates the account and saves user profile to Supabase.
+ * No OTP or email verification required.
  */
 export async function signup(email, password, fullName, organization) {
   const owner_id = generateOwnerId()
@@ -120,10 +114,12 @@ export async function signup(email, password, fullName, organization) {
       options: {
         data: {
           full_name: fullName.trim(),
+          name: fullName.trim(),
           organization: (organization || '').trim(),
           college_company: (organization || '').trim(),
           owner_id: owner_id,
           user_id: owner_id,
+          role: 'user',
         },
       },
     })
@@ -138,15 +134,14 @@ export async function signup(email, password, fullName, organization) {
       user_id: owner_id,
       owner_id: owner_id,
       email: cleanEmail,
+      role: 'user',
       full_name: fullName.trim(),
       college_company: organization || null,
       created_at: supaUser?.created_at || new Date().toISOString(),
     }
 
-    // Only save session if Supabase returned a real session immediately
-    // If confirmation is needed (session is null), do NOT save fake tokens
-    if (session?.access_token) {
-      saveAuth(session.access_token, userObj)
+    // Save profile to database non-sensitively (passwords are never stored)
+    if (supaUser?.id) {
       try {
         await supabase.from('profiles').upsert({
           id: supaUser.id,
@@ -157,13 +152,18 @@ export async function signup(email, password, fullName, organization) {
           college_company: organization || null,
           created_at: userObj.created_at,
         })
-      } catch (_) {}
+      } catch (pErr) {
+        console.warn('Profile sync on signup:', pErr?.message)
+      }
+    }
+
+    if (session?.access_token) {
+      saveAuth(session.access_token, userObj)
     }
 
     return {
       session,
       user: userObj,
-      needsEmailConfirmation: !session,
       owner_id,
     }
   } catch (supaErr) {
@@ -172,105 +172,18 @@ export async function signup(email, password, fullName, organization) {
 }
 
 /**
- * Verify 6-digit Email OTP for signup confirmation.
- * Uses official Supabase type: 'signup'.
- * Once verified, saves real authenticated session to localStorage and upserts profile.
+ * Log in using Email or Username/Owner ID + Password with Supabase Auth.
+ * If user supplies a username or Owner ID (e.g. Admin@123 or OWN-XXXX),
+ * looks up the corresponding email from the profiles table.
  */
-export async function verifySignupOtp(email, token, pendingMeta = {}) {
-  const cleanToken = String(token).replace(/\D/g, '').trim()
-  const cleanEmail = String(email).trim().toLowerCase()
-
-  if (!cleanEmail) throw new Error('Email address is missing.')
-  if (cleanToken.length !== 6) throw new Error('Please enter the complete 6-digit verification code.')
-
-  try {
-    const { data, error } = await supabase.auth.verifyOtp({
-      email: cleanEmail,
-      token: cleanToken,
-      type: 'signup',
-    })
-
-    if (error) throw error
-
-    const supaUser = data?.user
-    const session = data?.session
-
-    if (!supaUser) {
-      throw new Error('Verification completed but user record could not be loaded.')
-    }
-
-    const meta = supaUser.user_metadata || {}
-    const owner_id = meta.owner_id || meta.user_id || pendingMeta.owner_id || `OWN-${supaUser.id.replace(/-/g, '').substring(0, 8).toUpperCase()}`
-
-    const userObj = {
-      id: supaUser.id,
-      user_id: owner_id,
-      owner_id: owner_id,
-      email: supaUser.email,
-      role: 'user',
-      full_name: meta.full_name || pendingMeta.name || supaUser.email.split('@')[0],
-      college_company: meta.college_company || meta.organization || pendingMeta.org || null,
-      created_at: supaUser.created_at,
-    }
-
-    // Upsert into profiles table with authenticated session
-    try {
-      await supabase.from('profiles').upsert({
-        id: supaUser.id,
-        user_id: owner_id,
-        name: userObj.full_name,
-        email: userObj.email,
-        role: 'user',
-        college_company: userObj.college_company,
-        created_at: userObj.created_at,
-      })
-    } catch (profileErr) {
-      console.warn('Profiles table sync after OTP verify:', profileErr?.message)
-    }
-
-    // Save the genuine JWT access token from Supabase session
-    if (session?.access_token) {
-      saveAuth(session.access_token, userObj)
-    }
-
-    return { session, user: userObj, owner_id }
-  } catch (err) {
-    throw new Error(formatAuthError(err))
-  }
-}
-
-/**
- * Verify 6-digit Email OTP for password recovery.
- * Uses official Supabase type: 'recovery'.
- */
-export async function verifyRecoveryOtp(email, token) {
-  const cleanToken = String(token).replace(/\D/g, '').trim()
-  const cleanEmail = String(email).trim().toLowerCase()
-
-  if (!cleanEmail) throw new Error('Email address is missing.')
-  if (cleanToken.length !== 6) throw new Error('Please enter the complete 6-digit verification code.')
-
-  try {
-    const { data, error } = await supabase.auth.verifyOtp({
-      email: cleanEmail,
-      token: cleanToken,
-      type: 'recovery',
-    })
-
-    if (error) throw error
-    return data
-  } catch (err) {
-    throw new Error(formatAuthError(err))
-  }
-}
-
 export async function login(identifier, password) {
   let targetEmail = (identifier || '').trim().toLowerCase()
+  const cleanId = (identifier || '').trim()
 
-  // If user entered a username or Owner ID instead of an email
-  if (!targetEmail.includes('@')) {
+  // If input is not a standard email address (e.g. Admin@123 or OWN-XXXX)
+  const isEmail = /\S+@\S+\.\S+/.test(cleanId)
+  if (!isEmail) {
     try {
-      const cleanId = identifier.trim()
       const { data: profile } = await supabase
         .from('profiles')
         .select('email')
@@ -280,7 +193,17 @@ export async function login(identifier, password) {
       if (profile?.email) {
         targetEmail = profile.email.trim().toLowerCase()
       } else {
-        throw new Error(`No account found matching username or Owner ID "${identifier}".`)
+        // Fallback: lookup using database RPC function
+        try {
+          const { data: rpcEmail } = await supabase.rpc('get_email_for_login', { identifier: cleanId })
+          if (rpcEmail) {
+            targetEmail = rpcEmail.trim().toLowerCase()
+          } else {
+            throw new Error(`No account found matching username or Owner ID "${cleanId}". Please use your registered email.`)
+          }
+        } catch (rpcErr) {
+          throw new Error(`No account found matching username or Owner ID "${cleanId}". Please use your registered email.`)
+        }
       }
     } catch (lookupErr) {
       if (lookupErr.message?.includes('No account found')) {
@@ -297,7 +220,7 @@ export async function login(identifier, password) {
 
     if (supaError) throw supaError
     if (!supaData?.session?.access_token) {
-      throw new Error('Authentication session could not be established. Please verify your email.')
+      throw new Error('Could not establish authentication session.')
     }
 
     const supaUser = supaData.user
@@ -361,11 +284,77 @@ export async function login(identifier, password) {
 export async function getAdminUsers() {
   const { data, error } = await supabase
     .from('profiles')
-    .select('id, user_id, name, email, role, phone, profile_photo, created_at')
+    .select('id, user_id, name, email, role, phone, profile_photo, college_company, created_at')
     .order('created_at', { ascending: false })
 
   if (error) throw error
   return data || []
+}
+
+export async function updateUserRole(profileId, newRole) {
+  const { data, error } = await supabase
+    .from('profiles')
+    .update({ role: newRole })
+    .eq('id', profileId)
+    .select()
+
+  if (error) throw error
+  return data
+}
+
+export async function getAdminInsights() {
+  const stats = {
+    totalUsers: 0,
+    adminUsers: 0,
+    standardUsers: 0,
+    totalModels: 0,
+    watermarkedModels: 0,
+    totalVerifications: 0,
+    tamperedDetected: 0,
+    avgIntegrity: 0,
+  }
+
+  try {
+    const { count: uCount } = await supabase.from('profiles').select('*', { count: 'exact', head: true })
+    if (uCount !== null) stats.totalUsers = uCount
+
+    const { count: aCount } = await supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('role', 'admin')
+    if (aCount !== null) stats.adminUsers = aCount
+
+    stats.standardUsers = Math.max(0, stats.totalUsers - stats.adminUsers)
+
+    const { count: mCount } = await supabase.from('models').select('*', { count: 'exact', head: true })
+    if (mCount !== null) stats.totalModels = mCount
+
+    const { count: wmCount } = await supabase.from('models').select('*', { count: 'exact', head: true }).eq('status', 'watermarked')
+    if (wmCount !== null) stats.watermarkedModels = wmCount
+
+    const { count: vCount } = await supabase.from('verifications').select('*', { count: 'exact', head: true })
+    if (vCount !== null) stats.totalVerifications = vCount
+
+    const { count: tCount } = await supabase.from('verifications').select('*', { count: 'exact', head: true }).eq('is_tampered', true)
+    if (tCount !== null) stats.tamperedDetected = tCount
+
+    const { data: integrityData } = await supabase.from('models').select('integrity_score').not('integrity_score', 'is', null)
+    if (integrityData?.length > 0) {
+      stats.avgIntegrity = integrityData.reduce((sum, r) => sum + (r.integrity_score || 0), 0) / integrityData.length
+    }
+  } catch (_) {}
+
+  return stats
+}
+
+export async function getAdminAllModels() {
+  try {
+    const { data, error } = await supabase
+      .from('models')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(50)
+
+    if (!error && data) return data
+  } catch (_) {}
+  return []
 }
 
 export async function fetchMe() {

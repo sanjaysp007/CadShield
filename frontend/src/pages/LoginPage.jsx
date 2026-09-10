@@ -3,13 +3,11 @@ import { useNavigate, Link } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Shield, Mail, Lock, User, Building2,
-  Eye, EyeOff, Copy, Check, ArrowRight, Sparkles, LogIn,
-  KeyRound, RefreshCw, ArrowLeft, ShieldCheck
+  Eye, EyeOff, Copy, Check, ArrowRight, Sparkles, LogIn
 } from 'lucide-react'
 import toast from 'react-hot-toast'
-import { login, signup, verifySignupOtp, verifyRecoveryOtp } from '../utils/api'
+import { login, signup } from '../utils/api'
 import { isLoggedIn, clearAuth, getUser } from '../utils/auth'
-import { supabase } from '../utils/supabase'
 
 /* ── Floating Orbs Background ──────────────────────── */
 function AuroraBackground() {
@@ -65,90 +63,8 @@ function AuthField({ id, label, type = 'text', value, onChange, placeholder, ico
   )
 }
 
-/* ── 6-Digit OTP Input Component ───────────────────── */
-function OtpInput({ value = '', onChange, disabled }) {
-  const refs = useRef([])
-  const chars = (value || '').replace(/\D/g, '').slice(0, 6).split('')
-
-  const handleKey = (i, e) => {
-    if (e.key === 'Backspace') {
-      e.preventDefault()
-      const currentDigits = (value || '').replace(/\D/g, '').split('')
-      if (currentDigits[i]) {
-        currentDigits[i] = ''
-      } else if (i > 0) {
-        currentDigits[i - 1] = ''
-        refs.current[i - 1]?.focus()
-      }
-      onChange(currentDigits.join(''))
-    } else if (e.key === 'ArrowLeft' && i > 0) {
-      refs.current[i - 1]?.focus()
-    } else if (e.key === 'ArrowRight' && i < 5) {
-      refs.current[i + 1]?.focus()
-    }
-  }
-
-  const handleChange = (i, char) => {
-    const digit = char.replace(/\D/g, '').slice(-1)
-    if (!digit) return
-    const current = (value || '').replace(/\D/g, '').padEnd(6, ' ').split('')
-    current[i] = digit
-    const updated = current.join('').trimEnd()
-    onChange(updated)
-    if (i < 5) {
-      refs.current[i + 1]?.focus()
-    }
-  }
-
-  const handlePaste = (e) => {
-    e.preventDefault()
-    const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6)
-    if (pasted) {
-      onChange(pasted)
-      const targetIdx = Math.min(pasted.length, 5)
-      refs.current[targetIdx]?.focus()
-    }
-  }
-
-  return (
-    <div style={{ display: 'flex', gap: 8, justifyContent: 'center', margin: '20px 0' }}>
-      {[0, 1, 2, 3, 4, 5].map((i) => {
-        const val = chars[i] || ''
-        return (
-          <input
-            key={i}
-            ref={el => (refs.current[i] = el)}
-            type="text"
-            inputMode="numeric"
-            autoComplete="one-time-code"
-            maxLength={1}
-            value={val}
-            disabled={disabled}
-            onChange={e => handleChange(i, e.target.value)}
-            onKeyDown={e => handleKey(i, e)}
-            onPaste={handlePaste}
-            style={{
-              width: 44, height: 52, textAlign: 'center',
-              fontFamily: "'Space Grotesk', monospace", fontSize: '1.4rem', fontWeight: 700,
-              color: '#00e5ff',
-              background: 'rgba(255,255,255,0.03)',
-              border: val ? '1.5px solid rgba(0,229,255,0.6)' : '1px solid rgba(255,255,255,0.1)',
-              borderRadius: 12, outline: 'none', transition: 'all 0.2s',
-              boxShadow: val ? '0 0 12px rgba(0,229,255,0.2)' : 'none',
-              boxSizing: 'border-box',
-              cursor: disabled ? 'not-allowed' : 'text',
-            }}
-            onFocus={e => { e.target.style.borderColor = 'rgba(0,229,255,0.8)'; e.target.style.boxShadow = '0 0 16px rgba(0,229,255,0.25)' }}
-            onBlur={e => { e.target.style.borderColor = val ? 'rgba(0,229,255,0.6)' : 'rgba(255,255,255,0.1)'; e.target.style.boxShadow = val ? '0 0 12px rgba(0,229,255,0.2)' : 'none' }}
-          />
-        )
-      })}
-    </div>
-  )
-}
-
 /* ── Owner ID reveal card ──────────────────────────── */
-function OwnerIdCard({ ownerId, onContinue }) {
+function OwnerIdCard({ ownerId, onContinue, onSignIn }) {
   const [copied, setCopied] = useState(false)
   const copy = () => { navigator.clipboard.writeText(ownerId); setCopied(true); setTimeout(() => setCopied(false), 2500) }
 
@@ -158,12 +74,12 @@ function OwnerIdCard({ ownerId, onContinue }) {
         <div style={{ width: 72, height: 72, margin: '0 auto 16px', borderRadius: 22, background: 'linear-gradient(135deg, rgba(0,229,255,0.12), rgba(139,92,246,0.12))', border: '1px solid rgba(0,229,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <Sparkles size={32} style={{ color: '#00e5ff', filter: 'drop-shadow(0 0 8px rgba(0,229,255,0.8))' }} />
         </div>
-        <h2 style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: '1.4rem', fontWeight: 800, color: '#f0f4ff', marginBottom: 6 }}>Account Verified!</h2>
-        <p style={{ color: '#4a5568', fontSize: '0.85rem' }}>Your unique Owner ID has been generated.</p>
+        <h2 style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: '1.4rem', fontWeight: 800, color: '#f0f4ff', marginBottom: 6 }}>Account Created!</h2>
+        <p style={{ color: '#6b7a8d', fontSize: '0.85rem' }}>Your unique Owner ID has been generated.</p>
       </div>
 
       <div style={{ padding: '20px 24px', borderRadius: 16, background: 'rgba(0,229,255,0.04)', border: '1px solid rgba(0,229,255,0.2)', marginBottom: 20, textAlign: 'center' }}>
-        <p style={{ fontSize: '0.7rem', fontWeight: 600, color: '#374151', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8 }}>Your Owner ID</p>
+        <p style={{ fontSize: '0.7rem', fontWeight: 600, color: '#6b7a8d', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8 }}>Your Owner ID</p>
         <div style={{ fontFamily: "'Space Grotesk', monospace", fontSize: '1.8rem', fontWeight: 800, color: '#00e5ff', letterSpacing: '0.08em', filter: 'drop-shadow(0 0 12px rgba(0,229,255,0.5))', marginBottom: 12 }}>
           {ownerId}
         </div>
@@ -174,7 +90,7 @@ function OwnerIdCard({ ownerId, onContinue }) {
 
       <div style={{ padding: '12px 16px', borderRadius: 12, background: 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.15)', marginBottom: 24 }}>
         <p style={{ fontSize: '0.78rem', color: 'rgba(245,158,11,0.9)', lineHeight: 1.5 }}>
-          ⚠ <strong>Save this ID.</strong> It is embedded in every watermark you create and is required for model verification.
+          ℹ <strong>Save this ID.</strong> It is embedded in every watermark you create to cryptographically verify model ownership.
         </p>
       </div>
 
@@ -182,10 +98,20 @@ function OwnerIdCard({ ownerId, onContinue }) {
         width: '100%', padding: '14px', borderRadius: 14, fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: '0.95rem', cursor: 'pointer',
         background: 'linear-gradient(135deg, #00e5ff, #8b5cf6)', color: '#04060f', border: 'none',
         display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-        boxShadow: '0 0 24px rgba(0,229,255,0.25)',
+        boxShadow: '0 0 24px rgba(0,229,255,0.25)', marginBottom: 10
       }}>
         Go to Dashboard <ArrowRight size={16} />
       </button>
+
+      {onSignIn && (
+        <button onClick={onSignIn} style={{
+          width: '100%', padding: '12px', borderRadius: 14, fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: '0.85rem', cursor: 'pointer',
+          background: 'rgba(255,255,255,0.03)', color: '#8892a4', border: '1px solid rgba(255,255,255,0.08)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+        }}>
+          <LogIn size={15} /> Sign In
+        </button>
+      )}
     </motion.div>
   )
 }
@@ -203,29 +129,10 @@ export default function LoginPage() {
   const [password,    setPassword]    = useState('')
   const [name,        setName]        = useState('')
   const [org,         setOrg]         = useState('')
-  const [otp,         setOtp]         = useState('')
-  const [newPassword, setNewPassword] = useState('')
   const [errors,      setErrors]      = useState({})
 
-  // OTP resend countdown (persisted across refresh via sessionStorage)
-  const getStoredCooldown = () => {
-    if (typeof window === 'undefined') return 0
-    const until = Number(sessionStorage.getItem('cadshield_resend_until') || 0)
-    const diff = Math.ceil((until - Date.now()) / 1000)
-    return diff > 0 ? diff : 0
-  }
-  const [resendCooldown, setResendCooldown] = useState(getStoredCooldown)
-
-  const startCooldown = (secs = 60) => {
-    const until = Date.now() + secs * 1000
-    sessionStorage.setItem('cadshield_resend_until', String(until))
-    setResendCooldown(secs)
-  }
-
-  // Anti-duplicate synchronous request guard
+  // In-flight guard
   const isActionInFlightRef = useRef(false)
-  const pendingEmailRef = useRef(typeof window !== 'undefined' ? (sessionStorage.getItem('cadshield_pending_email') || '') : '')
-  const pendingOwnerIdRef = useRef(typeof window !== 'undefined' ? (sessionStorage.getItem('cadshield_pending_owner_id') || '') : '')
 
   useEffect(() => {
     document.title = 'Login – CADShield'
@@ -236,50 +143,29 @@ export default function LoginPage() {
     }
   }, [navigate])
 
-  // Countdown timer for resending OTP
-  useEffect(() => {
-    if (resendCooldown <= 0) {
-      sessionStorage.removeItem('cadshield_resend_until')
-      return
-    }
-    const timer = setInterval(() => {
-      setResendCooldown(c => {
-        if (c <= 1) {
-          sessionStorage.removeItem('cadshield_resend_until')
-          return 0
-        }
-        return c - 1
-      })
-    }, 1000)
-    return () => clearInterval(timer)
-  }, [resendCooldown])
-
   const validate = () => {
     const e = {}
     if (mode === 'login') {
-      if (!email.trim()) e.email = 'Email or Username / Owner ID is required'
+      if (!email.trim()) e.email = 'Email, Username, or Owner ID is required'
     } else {
-      if (!email.trim()) e.email = 'Email is required'
-      else if (!/\S+@\S+\.\S+/.test(email)) e.email = 'Enter a valid email'
+      if (!email.trim()) e.email = 'Email address is required'
+      else if (!/\S+@\S+\.\S+/.test(email)) e.email = 'Enter a valid email address'
     }
 
-    if (mode === 'login' || mode === 'signup') {
-      if (!password) e.password = 'Password is required'
-      else if (password.length < 6) e.password = 'At least 6 characters'
+    if (!password) {
+      e.password = 'Password is required'
+    } else if (password.length < 6) {
+      e.password = 'Password must be at least 6 characters'
     }
 
-    if (mode === 'signup' && !name.trim()) e.name = 'Full name is required'
-
-    if (mode === 'reset-password') {
-      if (!newPassword) e.newPassword = 'New password is required'
-      else if (newPassword.length < 6) e.newPassword = 'At least 6 characters'
+    if (mode === 'signup' && !name.trim()) {
+      e.name = 'Full name is required'
     }
 
     setErrors(e)
     return !Object.keys(e).length
   }
 
-  // Handle Login & Signup initial submit (Strictly single-request guarded)
   const handleAuthSubmit = async (e) => {
     e.preventDefault()
     if (!validate()) return
@@ -287,7 +173,6 @@ export default function LoginPage() {
     isActionInFlightRef.current = true
     setLoading(true)
 
-    const cleanEmail = email.trim().toLowerCase()
     try {
       if (mode === 'login') {
         const res = await login(email.trim(), password)
@@ -298,185 +183,13 @@ export default function LoginPage() {
           navigate('/dashboard')
         }
       } else if (mode === 'signup') {
+        const cleanEmail = email.trim().toLowerCase()
         const res = await signup(cleanEmail, password, name, org || undefined)
-        pendingEmailRef.current = cleanEmail
-        pendingOwnerIdRef.current = res.owner_id
-        sessionStorage.setItem('cadshield_pending_email', cleanEmail)
-        sessionStorage.setItem('cadshield_pending_owner_id', res.owner_id)
-
-        if (res.needsEmailConfirmation) {
-          toast.success('6-digit verification code sent to your email!')
-          setMode('otp')
-          setOtp('')
-          startCooldown(60)
-        } else {
-          toast.success('Account created successfully!')
-          setNewOwner(res.owner_id)
-        }
+        toast.success('Account created successfully!')
+        setNewOwner(res.owner_id)
       }
     } catch (err) {
-      toast.error(err?.message || 'Something went wrong')
-    } finally {
-      isActionInFlightRef.current = false
-      setLoading(false)
-    }
-  }
-
-  // Handle OTP Verification for Registration
-  const handleOtpVerify = async (e) => {
-    e.preventDefault()
-    const cleanOtp = String(otp || '').replace(/\D/g, '')
-    if (cleanOtp.length !== 6) {
-      setErrors({ otp: 'Please enter the complete 6-digit code' })
-      return
-    }
-    const targetEmail = (email || pendingEmailRef.current || sessionStorage.getItem('cadshield_pending_email') || '').trim().toLowerCase()
-    if (!targetEmail) {
-      setErrors({ otp: 'Email is missing. Please return to registration.' })
-      return
-    }
-
-    if (isActionInFlightRef.current) return
-    isActionInFlightRef.current = true
-    setLoading(true)
-    setErrors({})
-
-    try {
-      const res = await verifySignupOtp(targetEmail, cleanOtp, {
-        owner_id: pendingOwnerIdRef.current || sessionStorage.getItem('cadshield_pending_owner_id'),
-        name: name.trim(),
-        org: org.trim(),
-      })
-      sessionStorage.removeItem('cadshield_pending_email')
-      sessionStorage.removeItem('cadshield_pending_owner_id')
-      toast.success('Email verified successfully!')
-      setNewOwner(res.owner_id)
-    } catch (err) {
-      setErrors({ otp: err?.message || 'Invalid or expired verification code.' })
-      toast.error(err?.message || 'Verification failed.')
-    } finally {
-      isActionInFlightRef.current = false
-      setLoading(false)
-    }
-  }
-
-  // Handle Forgot Password - Step 1: Send OTP
-  const handleForgotSubmit = async (e) => {
-    e.preventDefault()
-    if (!validate()) return
-    if (loading || isActionInFlightRef.current) return
-    isActionInFlightRef.current = true
-    setLoading(true)
-
-    const cleanEmail = email.trim().toLowerCase()
-    pendingEmailRef.current = cleanEmail
-    sessionStorage.setItem('cadshield_pending_email', cleanEmail)
-
-    try {
-      const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail)
-      if (error) throw error
-      toast.success('6-digit reset code sent to your email!')
-      setMode('forgot-otp')
-      setOtp('')
-      startCooldown(60)
-    } catch (err) {
-      toast.error(err?.message || 'Could not send reset code. Please check your email.')
-    } finally {
-      isActionInFlightRef.current = false
-      setLoading(false)
-    }
-  }
-
-  // Handle Forgot Password - Step 2: Verify OTP
-  const handleForgotOtpVerify = async (e) => {
-    e.preventDefault()
-    const cleanOtp = String(otp || '').replace(/\D/g, '')
-    if (cleanOtp.length !== 6) {
-      setErrors({ otp: 'Please enter the complete 6-digit code' })
-      return
-    }
-    const targetEmail = (email || pendingEmailRef.current || sessionStorage.getItem('cadshield_pending_email') || '').trim().toLowerCase()
-    if (!targetEmail) {
-      setErrors({ otp: 'Email is missing. Please restart password reset.' })
-      return
-    }
-
-    if (loading || isActionInFlightRef.current) return
-    isActionInFlightRef.current = true
-    setLoading(true)
-    setErrors({})
-
-    try {
-      await verifyRecoveryOtp(targetEmail, cleanOtp)
-      toast.success('Code verified! Enter your new password.')
-      setMode('reset-password')
-      setOtp('')
-    } catch (err) {
-      setErrors({ otp: err?.message || 'Invalid or expired reset code.' })
-      toast.error(err?.message || 'Verification failed.')
-    } finally {
-      isActionInFlightRef.current = false
-      setLoading(false)
-    }
-  }
-
-  // Handle Forgot Password - Step 3: Set New Password
-  const handleResetPassword = async (e) => {
-    e.preventDefault()
-    if (!validate()) return
-    if (loading || isActionInFlightRef.current) return
-    isActionInFlightRef.current = true
-    setLoading(true)
-
-    try {
-      const { error } = await supabase.auth.updateUser({
-        password: newPassword,
-      })
-      if (error) throw error
-      await supabase.auth.signOut()
-      clearAuth()
-      sessionStorage.removeItem('cadshield_pending_email')
-      sessionStorage.removeItem('cadshield_pending_owner_id')
-      toast.success('Password updated successfully! Please sign in with your new password.', { duration: 5000 })
-      switchMode('login')
-    } catch (err) {
-      toast.error(err?.message || 'Failed to update password.')
-    } finally {
-      isActionInFlightRef.current = false
-      setLoading(false)
-    }
-  }
-
-  // Resend OTP (Strictly single-request guarded with 60-second cooldown)
-  const handleResendOtp = async (type) => {
-    if (resendCooldown > 0 || isActionInFlightRef.current || loading) return
-    isActionInFlightRef.current = true
-    startCooldown(60) // Immediately lock button & persist cooldown
-    setLoading(true)
-
-    const targetEmail = (email || pendingEmailRef.current || sessionStorage.getItem('cadshield_pending_email') || '').trim().toLowerCase()
-    if (!targetEmail) {
-      toast.error('Email address is missing.')
-      isActionInFlightRef.current = false
-      setLoading(false)
-      return
-    }
-
-    try {
-      if (type === 'signup') {
-        const { error } = await supabase.auth.resend({
-          type: 'signup',
-          email: targetEmail,
-        })
-        if (error) throw error
-        toast.success('New 6-digit verification code sent!')
-      } else {
-        const { error } = await supabase.auth.resetPasswordForEmail(targetEmail)
-        if (error) throw error
-        toast.success('New 6-digit reset code sent!')
-      }
-    } catch (err) {
-      toast.error(err?.message || 'Failed to resend code.')
+      toast.error(err?.message || 'Authentication error')
     } finally {
       isActionInFlightRef.current = false
       setLoading(false)
@@ -486,9 +199,7 @@ export default function LoginPage() {
   const switchMode = (m) => {
     setMode(m)
     setErrors({})
-    setOtp('')
     setPassword('')
-    setNewPassword('')
   }
 
   return (
@@ -507,7 +218,7 @@ export default function LoginPage() {
               CADShield
             </span>
           </Link>
-          <p style={{ color: '#374151', fontSize: '0.83rem', marginTop: 8 }}>Secure 3D Model Watermarking & Authentication</p>
+          <p style={{ color: '#4a5568', fontSize: '0.83rem', marginTop: 8 }}>Secure 3D Model Watermarking & Authentication</p>
         </motion.div>
 
         {/* Card */}
@@ -523,189 +234,18 @@ export default function LoginPage() {
         >
           <AnimatePresence mode="wait">
 
-            {/* ── 1. Owner ID reveal after verified registration ── */}
+            {/* ── 1. Owner ID reveal after registration ── */}
             {newOwner ? (
               <motion.div key="owner" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                <OwnerIdCard ownerId={newOwner} onContinue={() => navigate('/dashboard')} />
+                <OwnerIdCard
+                  ownerId={newOwner}
+                  onContinue={() => navigate('/dashboard')}
+                  onSignIn={() => { setNewOwner(null); switchMode('login') }}
+                />
               </motion.div>
-            ) : mode === 'otp' ? (
-
-              /* ── 2. Email OTP Verification Screen (Registration) ── */
-              <motion.div key="otp" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                <div style={{ textAlign: 'center', marginBottom: 20 }}>
-                  <div style={{ width: 52, height: 52, margin: '0 auto 12px', borderRadius: 16, background: 'rgba(0,229,255,0.1)', border: '1px solid rgba(0,229,255,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <KeyRound size={24} style={{ color: '#00e5ff' }} />
-                  </div>
-                  <h2 style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: '1.3rem', fontWeight: 800, color: '#f0f4ff', marginBottom: 4 }}>
-                    Verify Your Email
-                  </h2>
-                  <p style={{ color: '#6b7a8d', fontSize: '0.82rem' }}>
-                    We sent a 6-digit code to <span style={{ color: '#00e5ff', fontWeight: 600 }}>{email || pendingEmailRef.current || 'your email'}</span>
-                  </p>
-                </div>
-
-                <form onSubmit={handleOtpVerify}>
-                  <OtpInput value={otp} onChange={setOtp} disabled={loading} />
-                  {errors.otp && <p style={{ color: '#f43f5e', fontSize: '0.75rem', textAlign: 'center', marginBottom: 12 }}>{errors.otp}</p>}
-
-                  <button type="submit" disabled={loading || isActionInFlightRef.current || (otp || '').replace(/\D/g, '').length < 6} style={{
-                    width: '100%', padding: '14px', borderRadius: 14, marginTop: 12,
-                    fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: '0.95rem',
-                    cursor: (loading || isActionInFlightRef.current || (otp || '').replace(/\D/g, '').length < 6) ? 'not-allowed' : 'pointer',
-                    opacity: (loading || isActionInFlightRef.current || (otp || '').replace(/\D/g, '').length < 6) ? 0.7 : 1,
-                    background: 'linear-gradient(135deg, #00e5ff, #8b5cf6)', color: '#04060f', border: 'none',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                    boxShadow: '0 0 24px rgba(0,229,255,0.2)',
-                  }}>
-                    {loading ? 'Verifying...' : <><ShieldCheck size={16} /> Verify & Complete Setup</>}
-                  </button>
-                </form>
-
-                <div style={{ textAlign: 'center', marginTop: 18, fontSize: '0.8rem', color: '#6b7a8d' }}>
-                  {resendCooldown > 0 ? (
-                    <span>Resend code in <strong style={{ color: '#00e5ff' }}>{resendCooldown}s</strong></span>
-                  ) : (
-                    <button
-                      type="button"
-                      disabled={resendCooldown > 0 || loading || isActionInFlightRef.current}
-                      onClick={() => handleResendOtp('signup')}
-                      style={{
-                        background: 'none', border: 'none', color: (loading || isActionInFlightRef.current) ? '#4a5568' : '#00e5ff',
-                        cursor: (loading || isActionInFlightRef.current) ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4, fontWeight: 600
-                      }}
-                    >
-                      <RefreshCw size={12} /> Resend OTP
-                    </button>
-                  )}
-                </div>
-
-                <button type="button" onClick={() => switchMode('signup')} style={{ width: '100%', background: 'none', border: 'none', color: '#6b7a8d', cursor: 'pointer', marginTop: 16, fontSize: '0.8rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
-                  <ArrowLeft size={13} /> Back to Registration
-                </button>
-              </motion.div>
-
-            ) : mode === 'forgot' ? (
-
-              /* ── 3. Forgot Password Screen (Email entry) ── */
-              <motion.div key="forgot" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                <div style={{ marginBottom: 20 }}>
-                  <h2 style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: '1.3rem', fontWeight: 800, color: '#f0f4ff', marginBottom: 4 }}>
-                    Reset Password
-                  </h2>
-                  <p style={{ color: '#4a5568', fontSize: '0.82rem' }}>
-                    Enter your registered email and we'll send you an OTP code to reset your password.
-                  </p>
-                </div>
-
-                <form onSubmit={handleForgotSubmit}>
-                  <AuthField id="email" label="Email Address" type="email" value={email} onChange={v => { setEmail(v); setErrors(p=>({...p,email:''})) }} placeholder="you@example.com" icon={Mail} error={errors.email} autoComplete="email" />
-
-                  <button type="submit" disabled={loading || isActionInFlightRef.current} style={{
-                    width: '100%', padding: '14px', borderRadius: 14, marginTop: 8,
-                    fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: '0.95rem',
-                    cursor: (loading || isActionInFlightRef.current) ? 'not-allowed' : 'pointer',
-                    opacity: (loading || isActionInFlightRef.current) ? 0.7 : 1,
-                    background: 'linear-gradient(135deg, #00e5ff, #8b5cf6)', color: '#04060f', border: 'none',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                    boxShadow: '0 0 24px rgba(0,229,255,0.2)',
-                  }}>
-                    {loading ? 'Sending OTP...' : <><Mail size={16} /> Send OTP</>}
-                  </button>
-                </form>
-
-                <button type="button" onClick={() => switchMode('login')} style={{ width: '100%', background: 'none', border: 'none', color: '#6b7a8d', cursor: 'pointer', marginTop: 20, fontSize: '0.8rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
-                  <ArrowLeft size={13} /> Back to Sign In
-                </button>
-              </motion.div>
-
-            ) : mode === 'forgot-otp' ? (
-
-              /* ── 4. Forgot Password OTP Verification ── */
-              <motion.div key="forgot-otp" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                <div style={{ textAlign: 'center', marginBottom: 20 }}>
-                  <div style={{ width: 52, height: 52, margin: '0 auto 12px', borderRadius: 16, background: 'rgba(0,229,255,0.1)', border: '1px solid rgba(0,229,255,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <KeyRound size={24} style={{ color: '#00e5ff' }} />
-                  </div>
-                  <h2 style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: '1.3rem', fontWeight: 800, color: '#f0f4ff', marginBottom: 4 }}>
-                    Enter Reset Code
-                  </h2>
-                  <p style={{ color: '#6b7a8d', fontSize: '0.82rem' }}>
-                    Enter the code sent to <span style={{ color: '#00e5ff', fontWeight: 600 }}>{email || pendingEmailRef.current || 'your email'}</span>
-                  </p>
-                </div>
-
-                <form onSubmit={handleForgotOtpVerify}>
-                  <OtpInput value={otp} onChange={setOtp} disabled={loading} />
-                  {errors.otp && <p style={{ color: '#f43f5e', fontSize: '0.75rem', textAlign: 'center', marginBottom: 12 }}>{errors.otp}</p>}
-
-                  <button type="submit" disabled={loading || isActionInFlightRef.current || (otp || '').replace(/\D/g, '').length < 6} style={{
-                    width: '100%', padding: '14px', borderRadius: 14, marginTop: 12,
-                    fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: '0.95rem',
-                    cursor: (loading || isActionInFlightRef.current || (otp || '').replace(/\D/g, '').length < 6) ? 'not-allowed' : 'pointer',
-                    opacity: (loading || isActionInFlightRef.current || (otp || '').replace(/\D/g, '').length < 6) ? 0.7 : 1,
-                    background: 'linear-gradient(135deg, #00e5ff, #8b5cf6)', color: '#04060f', border: 'none',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                    boxShadow: '0 0 24px rgba(0,229,255,0.2)',
-                  }}>
-                    {loading ? 'Verifying...' : <><Check size={16} /> Verify Reset Code</>}
-                  </button>
-                </form>
-
-                <div style={{ textAlign: 'center', marginTop: 18, fontSize: '0.8rem', color: '#6b7a8d' }}>
-                  {resendCooldown > 0 ? (
-                    <span>Resend code in <strong style={{ color: '#00e5ff' }}>{resendCooldown}s</strong></span>
-                  ) : (
-                    <button
-                      type="button"
-                      disabled={resendCooldown > 0 || loading}
-                      onClick={() => handleResendOtp('recovery')}
-                      style={{
-                        background: 'none', border: 'none', color: loading ? '#4a5568' : '#00e5ff',
-                        cursor: loading ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4, fontWeight: 600
-                      }}
-                    >
-                      <RefreshCw size={12} /> Resend OTP
-                    </button>
-                  )}
-                </div>
-
-                <button type="button" onClick={() => switchMode('forgot')} style={{ width: '100%', background: 'none', border: 'none', color: '#6b7a8d', cursor: 'pointer', marginTop: 16, fontSize: '0.8rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
-                  <ArrowLeft size={13} /> Back
-                </button>
-              </motion.div>
-
-            ) : mode === 'reset-password' ? (
-
-              /* ── 5. Set New Password Screen ── */
-              <motion.div key="reset-password" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                <div style={{ marginBottom: 20 }}>
-                  <h2 style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: '1.3rem', fontWeight: 800, color: '#f0f4ff', marginBottom: 4 }}>
-                    New Password
-                  </h2>
-                  <p style={{ color: '#4a5568', fontSize: '0.82rem' }}>
-                    Choose a secure password for your account.
-                  </p>
-                </div>
-
-                <form onSubmit={handleResetPassword}>
-                  <AuthField id="newPassword" label="New Password" type="password" value={newPassword} onChange={v => { setNewPassword(v); setErrors(p=>({...p,newPassword:''})) }} placeholder="Min. 6 characters" icon={Lock} error={errors.newPassword} autoComplete="new-password" />
-
-                  <button type="submit" disabled={loading} style={{
-                    width: '100%', padding: '14px', borderRadius: 14, marginTop: 8,
-                    fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: '0.95rem',
-                    cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.7 : 1,
-                    background: 'linear-gradient(135deg, #00e5ff, #8b5cf6)', color: '#04060f', border: 'none',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                    boxShadow: '0 0 24px rgba(0,229,255,0.2)',
-                  }}>
-                    {loading ? 'Saving...' : <><Check size={16} /> Save New Password</>}
-                  </button>
-                </form>
-              </motion.div>
-
             ) : (
 
-              /* ── 6. Normal Login / Signup Form ── */
+              /* ── 2. Login / Signup Form (Email + Password only) ── */
               <motion.div key="form" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
 
                 {/* Tab toggle */}
@@ -724,7 +264,7 @@ export default function LoginPage() {
                   {mode === 'login' ? 'Welcome back' : 'Create your account'}
                 </h2>
                 <p style={{ color: '#4a5568', fontSize: '0.82rem', marginBottom: 24 }}>
-                  {mode === 'login' ? 'Sign in to manage your protected 3D models.' : 'Get a free Owner ID and start watermarking.'}
+                  {mode === 'login' ? 'Sign in with your email or username to access your protected models.' : 'Register with email and password to receive a unique Owner ID.'}
                 </p>
 
                 <form onSubmit={handleAuthSubmit} noValidate>
@@ -737,20 +277,32 @@ export default function LoginPage() {
                     )}
                   </AnimatePresence>
 
-                  <AuthField id="email" label={mode === 'login' ? 'Email or Username / Owner ID' : 'Email Address'} type={mode === 'login' ? 'text' : 'email'} value={email} onChange={v => { setEmail(v); setErrors(p=>({...p,email:''})) }} placeholder={mode === 'login' ? 'you@example.com or OWN-XXXX-XXXX' : 'you@example.com'} icon={Mail} error={errors.email} autoComplete={mode === 'login' ? 'username' : 'email'} />
-                  <AuthField id="pass"  label="Password" type="password" value={password} onChange={v => { setPassword(v); setErrors(p=>({...p,password:''})) }} placeholder={mode==='signup'?'Min. 6 characters':'••••••••'} icon={Lock} error={errors.password} autoComplete={mode==='login'?'current-password':'new-password'} />
+                  <AuthField
+                    id="email"
+                    label={mode === 'login' ? 'Email, Username, or Owner ID' : 'Email Address'}
+                    type={mode === 'login' ? 'text' : 'email'}
+                    value={email}
+                    onChange={v => { setEmail(v); setErrors(p=>({...p,email:''})) }}
+                    placeholder={mode === 'login' ? 'you@example.com or Admin@123' : 'you@example.com'}
+                    icon={Mail}
+                    error={errors.email}
+                    autoComplete={mode === 'login' ? 'username' : 'email'}
+                  />
 
-                  {/* Forgot Password Link */}
-                  {mode === 'login' && (
-                    <div style={{ textAlign: 'right', marginTop: -6, marginBottom: 14 }}>
-                      <button type="button" onClick={() => switchMode('forgot')} style={{ background: 'none', border: 'none', color: '#00e5ff', fontSize: '0.78rem', cursor: 'pointer', padding: 0 }}>
-                        Forgot password?
-                      </button>
-                    </div>
-                  )}
+                  <AuthField
+                    id="pass"
+                    label="Password"
+                    type="password"
+                    value={password}
+                    onChange={v => { setPassword(v); setErrors(p=>({...p,password:''})) }}
+                    placeholder={mode === 'signup' ? 'Min. 6 characters' : '••••••••'}
+                    icon={Lock}
+                    error={errors.password}
+                    autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+                  />
 
                   <button type="submit" disabled={loading || isActionInFlightRef.current} style={{
-                    width: '100%', padding: '14px', borderRadius: 14, marginTop: 4,
+                    width: '100%', padding: '14px', borderRadius: 14, marginTop: 8,
                     fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: '0.95rem',
                     cursor: (loading || isActionInFlightRef.current) ? 'not-allowed' : 'pointer',
                     opacity: (loading || isActionInFlightRef.current) ? 0.7 : 1,
@@ -759,9 +311,9 @@ export default function LoginPage() {
                     boxShadow: '0 0 24px rgba(0,229,255,0.2)', transition: 'all 0.2s',
                   }}>
                     {loading ? (
-                      <><motion.div animate={{ rotate: 360 }} transition={{ duration: 0.8, repeat: Infinity, ease: 'linear' }}><Shield size={16} /></motion.div> {mode === 'login' ? 'Signing in…' : 'Sending OTP…'}</>
+                      <><motion.div animate={{ rotate: 360 }} transition={{ duration: 0.8, repeat: Infinity, ease: 'linear' }}><Shield size={16} /></motion.div> {mode === 'login' ? 'Signing in…' : 'Creating account…'}</>
                     ) : (
-                      <>{mode === 'login' ? <LogIn size={16}/> : <Mail size={16}/>} {mode === 'login' ? 'Sign In' : 'Send OTP'}</>
+                      <>{mode === 'login' ? <LogIn size={16}/> : <Sparkles size={16}/>} {mode === 'login' ? 'Sign In' : 'Create Account'}</>
                     )}
                   </button>
                 </form>
@@ -769,7 +321,7 @@ export default function LoginPage() {
                 {/* Switch prompt */}
                 <p style={{ textAlign: 'center', marginTop: 20, color: '#374151', fontSize: '0.82rem' }}>
                   {mode === 'login' ? "Don't have an account? " : 'Already have an account? '}
-                  <button onClick={() => switchMode(mode==='login'?'signup':'login')} style={{ background: 'none', border: 'none', color: '#00e5ff', cursor: 'pointer', fontWeight: 600, fontSize: '0.82rem' }}>
+                  <button onClick={() => switchMode(mode === 'login' ? 'signup' : 'login')} style={{ background: 'none', border: 'none', color: '#00e5ff', cursor: 'pointer', fontWeight: 600, fontSize: '0.82rem' }}>
                     {mode === 'login' ? 'Create one' : 'Sign in'}
                   </button>
                 </p>
@@ -782,7 +334,7 @@ export default function LoginPage() {
 
         {/* Footer */}
         <p style={{ textAlign: 'center', color: '#1f2937', fontSize: '0.72rem', marginTop: 20 }}>
-          Protected by HMAC-SHA256 watermarking · Supabase Auth
+          Protected by HMAC-SHA256 watermarking · Supabase Authentication
         </p>
       </div>
     </div>

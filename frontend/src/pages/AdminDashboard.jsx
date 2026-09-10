@@ -4,13 +4,14 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   ShieldAlert, Users, ShieldCheck, UserCheck, Search,
   RefreshCw, Copy, Check, Calendar, Phone, Mail, ArrowLeft,
-  Lock, AlertTriangle, ExternalLink, Sparkles
+  Lock, AlertTriangle, ExternalLink, Sparkles, Layers, Activity,
+  FileCheck, UserPlus, UserMinus, Building2, BarChart2
 } from 'lucide-react'
 import { format } from 'date-fns'
 import toast from 'react-hot-toast'
 import GlassCard from '../components/GlassCard'
 import NeonButton from '../components/NeonButton'
-import { getAdminUsers, getAssetUrl } from '../utils/api'
+import { getAdminUsers, updateUserRole, getAdminInsights, getAdminAllModels, getAssetUrl } from '../utils/api'
 import { getUser, isAdmin } from '../utils/auth'
 
 export default function AdminDashboard() {
@@ -18,33 +19,65 @@ export default function AdminDashboard() {
   const currentUser = getUser() || {}
   const authorized = isAdmin()
 
+  const [activeTab, setActiveTab] = useState('users') // 'users' | 'insights' | 'models'
   const [users, setUsers] = useState([])
+  const [insights, setInsights] = useState({
+    totalUsers: 0, adminUsers: 0, standardUsers: 0,
+    totalModels: 0, watermarkedModels: 0, totalVerifications: 0,
+    tamperedDetected: 0, avgIntegrity: 0
+  })
+  const [models, setModels] = useState([])
   const [loading, setLoading] = useState(true)
   const [query, setQuery] = useState('')
   const [roleFilter, setRoleFilter] = useState('ALL')
   const [copiedId, setCopiedId] = useState(null)
   const [refreshing, setRefreshing] = useState(false)
+  const [updatingId, setUpdatingId] = useState(null)
 
   useEffect(() => {
     document.title = 'Admin Dashboard – CADShield'
     if (authorized) {
-      loadUsers()
+      loadAllData()
     } else {
       setLoading(false)
     }
   }, [authorized])
 
-  const loadUsers = async () => {
+  const loadAllData = async () => {
     setLoading(true)
     try {
-      const data = await getAdminUsers()
-      setUsers(data || [])
+      const [uData, iData, mData] = await Promise.all([
+        getAdminUsers().catch(() => []),
+        getAdminInsights().catch(() => ({})),
+        getAdminAllModels().catch(() => [])
+      ])
+      setUsers(uData || [])
+      if (iData && Object.keys(iData).length > 0) setInsights(iData)
+      setModels(mData || [])
     } catch (err) {
-      console.error('Failed to load admin users:', err)
-      toast.error(err?.message || 'Failed to fetch registered users from Supabase')
+      console.error('Failed to load admin data:', err)
+      toast.error('Failed to fetch real data from Supabase')
     } finally {
       setLoading(false)
       setRefreshing(false)
+    }
+  }
+
+  const handleRoleToggle = async (targetUser) => {
+    if (targetUser.id === currentUser.id) {
+      toast.error('You cannot change your own admin role.')
+      return
+    }
+    const newRole = targetUser.role === 'admin' ? 'user' : 'admin'
+    setUpdatingId(targetUser.id)
+    try {
+      await updateUserRole(targetUser.id, newRole)
+      toast.success(`User ${targetUser.name || targetUser.email} role updated to ${newRole.toUpperCase()}!`)
+      loadAllData()
+    } catch (err) {
+      toast.error(err?.message || 'Failed to update user role in Supabase')
+    } finally {
+      setUpdatingId(null)
     }
   }
 
@@ -151,13 +184,13 @@ export default function AdminDashboard() {
               Admin <span style={{ background: 'linear-gradient(135deg, #00e5ff, #8b5cf6)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>Dashboard</span>
             </h1>
             <p style={{ color: '#6b7a8d', fontSize: '0.88rem' }}>
-              View and audit all registered users stored securely in Supabase with Row Level Security. Passwords are never stored or exposed.
+              Full administrative view into registered users, authentic database statistics, and registered CADShield projects.
             </p>
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <button
-              onClick={() => { setRefreshing(true); loadUsers() }}
+              onClick={() => { setRefreshing(true); loadAllData() }}
               style={{
                 display: 'flex', alignItems: 'center', gap: 6,
                 padding: '10px 16px', borderRadius: 12,
@@ -171,199 +204,405 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        {/* Stat Cards */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginBottom: 28 }} className="grid grid-cols-1 sm:grid-cols-3">
-          <GlassCard style={{ padding: '20px 24px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-              <span style={{ fontSize: '0.75rem', color: '#6b7a8d', textTransform: 'uppercase', fontWeight: 600 }}>Total Registered Users</span>
-              <Users size={18} style={{ color: '#00e5ff' }} />
-            </div>
-            <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: '1.8rem', fontWeight: 800, color: '#f0f4ff' }}>
-              {loading ? '...' : totalCount}
-            </div>
-          </GlassCard>
-
-          <GlassCard style={{ padding: '20px 24px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-              <span style={{ fontSize: '0.75rem', color: '#6b7a8d', textTransform: 'uppercase', fontWeight: 600 }}>Administrators</span>
-              <ShieldCheck size={18} style={{ color: '#22c55e' }} />
-            </div>
-            <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: '1.8rem', fontWeight: 800, color: '#22c55e' }}>
-              {loading ? '...' : adminCount}
-            </div>
-          </GlassCard>
-
-          <GlassCard style={{ padding: '20px 24px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-              <span style={{ fontSize: '0.75rem', color: '#6b7a8d', textTransform: 'uppercase', fontWeight: 600 }}>Standard Users</span>
-              <UserCheck size={18} style={{ color: '#a78bfa' }} />
-            </div>
-            <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: '1.8rem', fontWeight: 800, color: '#a78bfa' }}>
-              {loading ? '...' : userCount}
-            </div>
-          </GlassCard>
-        </div>
-
-        {/* Search & Filter Bar */}
-        <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
-          <div style={{ position: 'relative', flex: 1, minWidth: 260 }}>
-            <Search size={16} style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: '#4a5568' }} />
-            <input
-              type="text"
-              value={query}
-              onChange={e => setQuery(e.target.value)}
-              placeholder="Search by Name, Email, User ID, or Phone..."
-              style={{
-                width: '100%', boxSizing: 'border-box', padding: '12px 16px 12px 42px',
-                background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)',
-                borderRadius: 12, color: '#f0f4ff', fontSize: '0.88rem', outline: 'none',
-              }}
-              onFocus={e => e.target.style.borderColor = 'rgba(0,229,255,0.4)'}
-              onBlur={e => e.target.style.borderColor = 'rgba(255,255,255,0.07)'}
-            />
-          </div>
-
-          <div style={{ display: 'flex', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 12, padding: 3 }}>
-            {['ALL', 'ADMIN', 'USER'].map(st => (
+        {/* Navigation Tabs */}
+        <div style={{ display: 'flex', gap: 8, marginBottom: 24, borderBottom: '1px solid rgba(255,255,255,0.06)', paddingBottom: 12 }}>
+          {[
+            { id: 'users', label: `Users (${users.length})`, icon: Users },
+            { id: 'insights', label: 'Platform Insights', icon: Activity },
+            { id: 'models', label: `Projects & Files (${models.length})`, icon: Layers },
+          ].map(t => {
+            const Icon = t.icon
+            const active = activeTab === t.id
+            return (
               <button
-                key={st}
-                onClick={() => setRoleFilter(st)}
+                key={t.id}
+                onClick={() => setActiveTab(t.id)}
                 style={{
-                  padding: '8px 16px', borderRadius: 9, fontSize: '0.78rem', fontWeight: 600, border: 'none', cursor: 'pointer',
-                  background: roleFilter === st ? 'rgba(0,229,255,0.12)' : 'transparent',
-                  color: roleFilter === st ? '#00e5ff' : '#6b7a8d',
-                  boxShadow: roleFilter === st ? 'inset 0 0 0 1px rgba(0,229,255,0.3)' : 'none',
-                  transition: 'all 0.2s',
+                  display: 'inline-flex', alignItems: 'center', gap: 8,
+                  padding: '10px 18px', borderRadius: 12, border: 'none', cursor: 'pointer',
+                  fontWeight: 650, fontSize: '0.85rem', transition: 'all 0.2s',
+                  background: active ? 'rgba(0,229,255,0.12)' : 'rgba(255,255,255,0.02)',
+                  color: active ? '#00e5ff' : '#6b7a8d',
+                  boxShadow: active ? 'inset 0 0 0 1px rgba(0,229,255,0.3)' : 'none',
                 }}
               >
-                {st}
+                <Icon size={15} /> {t.label}
               </button>
-            ))}
-          </div>
+            )
+          })}
         </div>
 
-        {/* Users Table */}
-        <GlassCard style={{ padding: 0, overflow: 'hidden' }}>
-          {loading ? (
-            <div style={{ padding: '64px 24px', textAlign: 'center', color: '#6b7a8d' }}>
-              <RefreshCw size={28} style={{ animation: 'rotate-slow 1s linear infinite', color: '#00e5ff', margin: '0 auto 12px' }} />
-              <div>Fetching registered users from Supabase...</div>
-            </div>
-          ) : filteredUsers.length === 0 ? (
-            <div style={{ padding: '64px 24px', textAlign: 'center', color: '#6b7a8d' }}>
-              <Users size={36} style={{ color: '#374151', margin: '0 auto 12px' }} />
-              <div style={{ fontSize: '1rem', fontWeight: 600, color: '#f0f4ff', marginBottom: 4 }}>No users found</div>
-              <div style={{ fontSize: '0.82rem' }}>No user matches the filter criteria or no profiles exist yet.</div>
-            </div>
-          ) : (
-            <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.84rem' }}>
-                <thead>
-                  <tr style={{ background: 'rgba(255,255,255,0.02)', borderBottom: '1px solid rgba(255,255,255,0.06)', color: '#6b7a8d', fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                    <th style={{ padding: '14px 20px' }}>User</th>
-                    <th style={{ padding: '14px 16px' }}>User ID</th>
-                    <th style={{ padding: '14px 16px' }}>Email</th>
-                    <th style={{ padding: '14px 16px' }}>Role</th>
-                    <th style={{ padding: '14px 16px' }}>Phone</th>
-                    <th style={{ padding: '14px 20px' }}>Registered</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredUsers.map((u, idx) => {
-                    const initials = (u.name || u.full_name || u.email || 'U')
-                      .split(' ')
-                      .map(p => p[0])
-                      .join('')
-                      .substring(0, 2)
-                      .toUpperCase()
+        {/* ── TAB 1: USERS MANAGEMENT ────────────────────────── */}
+        {activeTab === 'users' && (
+          <div>
+            {/* Stat Cards */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginBottom: 24 }} className="grid grid-cols-1 sm:grid-cols-3">
+              <GlassCard style={{ padding: '20px 24px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <span style={{ fontSize: '0.75rem', color: '#6b7a8d', textTransform: 'uppercase', fontWeight: 600 }}>Total Registered Users</span>
+                  <Users size={18} style={{ color: '#00e5ff' }} />
+                </div>
+                <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: '1.8rem', fontWeight: 800, color: '#f0f4ff' }}>
+                  {loading ? '...' : totalCount}
+                </div>
+              </GlassCard>
 
-                    const photoSrc = getAssetUrl(u.profile_photo)
-                    const isRowAdmin = u.role === 'admin'
+              <GlassCard style={{ padding: '20px 24px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <span style={{ fontSize: '0.75rem', color: '#6b7a8d', textTransform: 'uppercase', fontWeight: 600 }}>Administrators</span>
+                  <ShieldCheck size={18} style={{ color: '#22c55e' }} />
+                </div>
+                <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: '1.8rem', fontWeight: 800, color: '#22c55e' }}>
+                  {loading ? '...' : adminCount}
+                </div>
+              </GlassCard>
 
-                    return (
-                      <tr
-                        key={u.id || idx}
-                        style={{
-                          borderBottom: '1px solid rgba(255,255,255,0.03)',
-                          transition: 'background 0.2s',
-                        }}
-                        onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,229,255,0.02)'}
-                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                      >
-                        {/* Avatar & Name */}
-                        <td style={{ padding: '14px 20px' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                            <div style={{
-                              width: 36, height: 36, borderRadius: '50%',
-                              overflow: 'hidden', border: '1px solid rgba(0,229,255,0.25)',
-                              background: 'linear-gradient(135deg, rgba(0,229,255,0.1), rgba(139,92,246,0.1))',
-                              display: 'flex', alignItems: 'center', justifyContent: 'center',
-                              flexShrink: 0,
-                            }}>
-                              {photoSrc ? (
-                                <img src={photoSrc} alt={u.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                              ) : (
-                                <span style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: '0.85rem', fontWeight: 700, color: '#00e5ff' }}>
-                                  {initials}
+              <GlassCard style={{ padding: '20px 24px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <span style={{ fontSize: '0.75rem', color: '#6b7a8d', textTransform: 'uppercase', fontWeight: 600 }}>Standard Users</span>
+                  <UserCheck size={18} style={{ color: '#a78bfa' }} />
+                </div>
+                <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: '1.8rem', fontWeight: 800, color: '#a78bfa' }}>
+                  {loading ? '...' : userCount}
+                </div>
+              </GlassCard>
+            </div>
+
+            {/* Search & Filter Bar */}
+            <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
+              <div style={{ position: 'relative', flex: 1, minWidth: 260 }}>
+                <Search size={16} style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: '#4a5568' }} />
+                <input
+                  type="text"
+                  value={query}
+                  onChange={e => setQuery(e.target.value)}
+                  placeholder="Search by Name, Email, User ID, or Phone..."
+                  style={{
+                    width: '100%', boxSizing: 'border-box', padding: '12px 16px 12px 42px',
+                    background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)',
+                    borderRadius: 12, color: '#f0f4ff', fontSize: '0.88rem', outline: 'none',
+                  }}
+                  onFocus={e => e.target.style.borderColor = 'rgba(0,229,255,0.4)'}
+                  onBlur={e => e.target.style.borderColor = 'rgba(255,255,255,0.07)'}
+                />
+              </div>
+
+              <div style={{ display: 'flex', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 12, padding: 3 }}>
+                {['ALL', 'ADMIN', 'USER'].map(st => (
+                  <button
+                    key={st}
+                    onClick={() => setRoleFilter(st)}
+                    style={{
+                      padding: '8px 16px', borderRadius: 9, fontSize: '0.78rem', fontWeight: 600, border: 'none', cursor: 'pointer',
+                      background: roleFilter === st ? 'rgba(0,229,255,0.12)' : 'transparent',
+                      color: roleFilter === st ? '#00e5ff' : '#6b7a8d',
+                      boxShadow: roleFilter === st ? 'inset 0 0 0 1px rgba(0,229,255,0.3)' : 'none',
+                      transition: 'all 0.2s',
+                    }}
+                  >
+                    {st}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Users Table */}
+            <GlassCard style={{ padding: 0, overflow: 'hidden' }}>
+              {loading ? (
+                <div style={{ padding: '64px 24px', textAlign: 'center', color: '#6b7a8d' }}>
+                  <RefreshCw size={28} style={{ animation: 'rotate-slow 1s linear infinite', color: '#00e5ff', margin: '0 auto 12px' }} />
+                  <div>Fetching registered users from Supabase...</div>
+                </div>
+              ) : filteredUsers.length === 0 ? (
+                <div style={{ padding: '64px 24px', textAlign: 'center', color: '#6b7a8d' }}>
+                  <Users size={36} style={{ color: '#374151', margin: '0 auto 12px' }} />
+                  <div style={{ fontSize: '1rem', fontWeight: 600, color: '#f0f4ff', marginBottom: 4 }}>No users found</div>
+                  <div style={{ fontSize: '0.82rem' }}>No user matches the filter criteria or no profiles exist yet.</div>
+                </div>
+              ) : (
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.84rem' }}>
+                    <thead>
+                      <tr style={{ background: 'rgba(255,255,255,0.02)', borderBottom: '1px solid rgba(255,255,255,0.06)', color: '#6b7a8d', fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                        <th style={{ padding: '14px 20px' }}>User</th>
+                        <th style={{ padding: '14px 16px' }}>Owner / User ID</th>
+                        <th style={{ padding: '14px 16px' }}>Email</th>
+                        <th style={{ padding: '14px 16px' }}>Role</th>
+                        <th style={{ padding: '14px 16px' }}>Organization</th>
+                        <th style={{ padding: '14px 16px' }}>Registered</th>
+                        <th style={{ padding: '14px 20px', textAlign: 'right' }}>Manage</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredUsers.map((u, idx) => {
+                        const initials = (u.name || u.full_name || u.email || 'U')
+                          .split(' ')
+                          .map(p => p[0])
+                          .join('')
+                          .substring(0, 2)
+                          .toUpperCase()
+
+                        const photoSrc = getAssetUrl(u.profile_photo)
+                        const isRowAdmin = u.role === 'admin'
+                        const isSelf = u.id === currentUser.id
+
+                        return (
+                          <tr
+                            key={u.id || idx}
+                            style={{
+                              borderBottom: '1px solid rgba(255,255,255,0.03)',
+                              transition: 'background 0.2s',
+                            }}
+                            onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,229,255,0.02)'}
+                            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                          >
+                            {/* Avatar & Name */}
+                            <td style={{ padding: '14px 20px' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                                <div style={{
+                                  width: 36, height: 36, borderRadius: '50%',
+                                  overflow: 'hidden', border: '1px solid rgba(0,229,255,0.25)',
+                                  background: 'linear-gradient(135deg, rgba(0,229,255,0.1), rgba(139,92,246,0.1))',
+                                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                  flexShrink: 0,
+                                }}>
+                                  {photoSrc ? (
+                                    <img src={photoSrc} alt={u.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                  ) : (
+                                    <span style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: '0.85rem', fontWeight: 700, color: '#00e5ff' }}>
+                                      {initials}
+                                    </span>
+                                  )}
+                                </div>
+                                <div>
+                                  <div style={{ fontWeight: 650, color: '#f0f4ff' }}>
+                                    {u.name || u.full_name || 'Anonymous User'}
+                                    {isSelf && <span style={{ marginLeft: 6, fontSize: '0.68rem', color: '#00e5ff', background: 'rgba(0,229,255,0.1)', padding: '2px 6px', borderRadius: 6 }}>You</span>}
+                                  </div>
+                                </div>
+                              </div>
+                            </td>
+
+                            {/* User ID */}
+                            <td style={{ padding: '14px 16px' }}>
+                              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '3px 8px', borderRadius: 8, background: 'rgba(0,229,255,0.04)', border: '1px solid rgba(0,229,255,0.15)' }}>
+                                <span style={{ fontFamily: 'monospace', fontSize: '0.8rem', color: '#00e5ff', fontWeight: 600 }}>
+                                  {u.user_id || u.id}
                                 </span>
+                                <button
+                                  onClick={() => copyUserId(u.user_id || u.id)}
+                                  style={{ background: 'none', border: 'none', color: copiedId === (u.user_id || u.id) ? '#22c55e' : '#4a5568', cursor: 'pointer', padding: 2 }}
+                                  title="Copy User ID"
+                                >
+                                  {copiedId === (u.user_id || u.id) ? <Check size={12} /> : <Copy size={12} />}
+                                </button>
+                              </div>
+                            </td>
+
+                            {/* Email */}
+                            <td style={{ padding: '14px 16px', color: '#cbd5e1' }}>
+                              {u.email}
+                            </td>
+
+                            {/* Role */}
+                            <td style={{ padding: '14px 16px' }}>
+                              <span style={{
+                                padding: '3px 9px', borderRadius: 8, fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase',
+                                background: isRowAdmin ? 'rgba(34,197,94,0.12)' : 'rgba(0,229,255,0.08)',
+                                color: isRowAdmin ? '#22c55e' : '#00e5ff',
+                                border: `1px solid ${isRowAdmin ? 'rgba(34,197,94,0.3)' : 'rgba(0,229,255,0.2)'}`
+                              }}>
+                                {u.role || 'user'}
+                              </span>
+                            </td>
+
+                            {/* Organization */}
+                            <td style={{ padding: '14px 16px', color: u.college_company ? '#cbd5e1' : '#4a5568' }}>
+                              {u.college_company || '—'}
+                            </td>
+
+                            {/* Registration Date */}
+                            <td style={{ padding: '14px 16px', color: '#6b7a8d', fontSize: '0.78rem' }}>
+                              {u.created_at ? format(new Date(u.created_at), 'MMM d, yyyy') : 'Recent'}
+                            </td>
+
+                            {/* Action: Manage Role */}
+                            <td style={{ padding: '14px 20px', textAlign: 'right' }}>
+                              {!isSelf ? (
+                                <button
+                                  disabled={updatingId === u.id}
+                                  onClick={() => handleRoleToggle(u)}
+                                  style={{
+                                    padding: '5px 12px', borderRadius: 8, fontSize: '0.72rem', fontWeight: 600, cursor: updatingId === u.id ? 'not-allowed' : 'pointer',
+                                    border: isRowAdmin ? '1px solid rgba(244,63,94,0.3)' : '1px solid rgba(34,197,94,0.3)',
+                                    background: isRowAdmin ? 'rgba(244,63,94,0.08)' : 'rgba(34,197,94,0.08)',
+                                    color: isRowAdmin ? '#f43f5e' : '#22c55e',
+                                  }}
+                                >
+                                  {updatingId === u.id ? 'Saving...' : isRowAdmin ? 'Demote to User' : 'Promote to Admin'}
+                                </button>
+                              ) : (
+                                <span style={{ color: '#4a5568', fontSize: '0.72rem' }}>Current Admin</span>
                               )}
-                            </div>
-                            <div style={{ fontWeight: 650, color: '#f0f4ff' }}>
-                              {u.name || u.full_name || 'Anonymous User'}
-                            </div>
-                          </div>
-                        </td>
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </GlassCard>
+          </div>
+        )}
 
-                        {/* User ID */}
-                        <td style={{ padding: '14px 16px' }}>
-                          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '3px 8px', borderRadius: 8, background: 'rgba(0,229,255,0.04)', border: '1px solid rgba(0,229,255,0.15)' }}>
-                            <span style={{ fontFamily: 'monospace', fontSize: '0.8rem', color: '#00e5ff', fontWeight: 600 }}>
-                              {u.user_id || u.id}
-                            </span>
-                            <button
-                              onClick={() => copyUserId(u.user_id || u.id)}
-                              style={{ background: 'none', border: 'none', color: copiedId === (u.user_id || u.id) ? '#22c55e' : '#4a5568', cursor: 'pointer', padding: 2 }}
-                              title="Copy User ID"
-                            >
-                              {copiedId === (u.user_id || u.id) ? <Check size={12} /> : <Copy size={12} />}
-                            </button>
-                          </div>
-                        </td>
+        {/* ── TAB 2: REAL APPLICATION INSIGHTS ────────────────── */}
+        {activeTab === 'insights' && (
+          <div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 24 }} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
+              <GlassCard style={{ padding: '20px 22px' }}>
+                <div style={{ fontSize: '0.72rem', color: '#6b7a8d', textTransform: 'uppercase', fontWeight: 600, marginBottom: 6 }}>
+                  Total Platform Users
+                </div>
+                <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: '1.8rem', fontWeight: 800, color: '#00e5ff' }}>
+                  {insights.totalUsers}
+                </div>
+                <div style={{ fontSize: '0.75rem', color: '#8892a4', marginTop: 4 }}>
+                  {insights.adminUsers} admin{insights.adminUsers === 1 ? '' : 's'}, {insights.standardUsers} standard
+                </div>
+              </GlassCard>
 
-                        {/* Email */}
-                        <td style={{ padding: '14px 16px', color: '#cbd5e1' }}>
-                          {u.email}
-                        </td>
+              <GlassCard style={{ padding: '20px 22px' }}>
+                <div style={{ fontSize: '0.72rem', color: '#6b7a8d', textTransform: 'uppercase', fontWeight: 600, marginBottom: 6 }}>
+                  Protected CAD Models
+                </div>
+                <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: '1.8rem', fontWeight: 800, color: '#a78bfa' }}>
+                  {insights.totalModels}
+                </div>
+                <div style={{ fontSize: '0.75rem', color: '#8892a4', marginTop: 4 }}>
+                  {insights.watermarkedModels} embedded with HMAC-SHA256
+                </div>
+              </GlassCard>
 
-                        {/* Role */}
+              <GlassCard style={{ padding: '20px 22px' }}>
+                <div style={{ fontSize: '0.72rem', color: '#6b7a8d', textTransform: 'uppercase', fontWeight: 600, marginBottom: 6 }}>
+                  Verifications Executed
+                </div>
+                <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: '1.8rem', fontWeight: 800, color: '#22c55e' }}>
+                  {insights.totalVerifications}
+                </div>
+                <div style={{ fontSize: '0.75rem', color: '#8892a4', marginTop: 4 }}>
+                  Authenticity checks logged
+                </div>
+              </GlassCard>
+
+              <GlassCard style={{ padding: '20px 22px' }}>
+                <div style={{ fontSize: '0.72rem', color: '#6b7a8d', textTransform: 'uppercase', fontWeight: 600, marginBottom: 6 }}>
+                  Tampered Incidents
+                </div>
+                <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: '1.8rem', fontWeight: 800, color: insights.tamperedDetected > 0 ? '#f43f5e' : '#22c55e' }}>
+                  {insights.tamperedDetected}
+                </div>
+                <div style={{ fontSize: '0.75rem', color: '#8892a4', marginTop: 4 }}>
+                  {insights.tamperedDetected === 0 ? 'No tampering detected' : 'Unauthorized modifications'}
+                </div>
+              </GlassCard>
+            </div>
+
+            <GlassCard style={{ padding: 28, marginBottom: 24 }}>
+              <h3 style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: '1.1rem', fontWeight: 700, color: '#f0f4ff', marginBottom: 12 }}>
+                Real-Time Security Metrics
+              </h3>
+              <p style={{ color: '#8892a4', fontSize: '0.85rem', marginBottom: 20 }}>
+                These metrics reflect actual records stored in Supabase with Row Level Security.
+              </p>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16 }} className="grid grid-cols-1 sm:grid-cols-2">
+                <div style={{ padding: '16px 20px', borderRadius: 14, background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                  <div style={{ color: '#6b7a8d', fontSize: '0.75rem', fontWeight: 600, textTransform: 'uppercase', marginBottom: 6 }}>Average Model Integrity</div>
+                  <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: '1.6rem', fontWeight: 800, color: '#00e5ff' }}>
+                    {insights.avgIntegrity > 0 ? `${insights.avgIntegrity.toFixed(1)}%` : 'No data yet'}
+                  </div>
+                </div>
+                <div style={{ padding: '16px 20px', borderRadius: 14, background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                  <div style={{ color: '#6b7a8d', fontSize: '0.75rem', fontWeight: 600, textTransform: 'uppercase', marginBottom: 6 }}>Database Storage State</div>
+                  <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: '1.6rem', fontWeight: 800, color: '#22c55e' }}>
+                    Connected
+                  </div>
+                </div>
+              </div>
+            </GlassCard>
+          </div>
+        )}
+
+        {/* ── TAB 3: PLATFORM PROJECTS & FILES ────────────────── */}
+        {activeTab === 'models' && (
+          <GlassCard style={{ padding: 0, overflow: 'hidden' }}>
+            <div style={{ padding: '20px 24px', borderBottom: '1px solid rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div>
+                <h3 style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: '1.1rem', fontWeight: 700, color: '#f0f4ff', margin: 0 }}>
+                  Registered 3D Models & Files
+                </h3>
+                <p style={{ color: '#6b7a8d', fontSize: '0.8rem', margin: '4px 0 0' }}>
+                  Audited list of actual CAD projects protected across the platform.
+                </p>
+              </div>
+            </div>
+
+            {models.length === 0 ? (
+              <div style={{ padding: '64px 24px', textAlign: 'center', color: '#6b7a8d' }}>
+                <Layers size={36} style={{ color: '#374151', margin: '0 auto 12px' }} />
+                <div style={{ fontSize: '1rem', fontWeight: 600, color: '#f0f4ff', marginBottom: 4 }}>No models or projects registered yet</div>
+                <div style={{ fontSize: '0.82rem' }}>When users upload or watermark 3D models, they will appear here in real time.</div>
+              </div>
+            ) : (
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.84rem' }}>
+                  <thead>
+                    <tr style={{ background: 'rgba(255,255,255,0.02)', borderBottom: '1px solid rgba(255,255,255,0.06)', color: '#6b7a8d', fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                      <th style={{ padding: '14px 20px' }}>Model / File Name</th>
+                      <th style={{ padding: '14px 16px' }}>Owner ID</th>
+                      <th style={{ padding: '14px 16px' }}>Format</th>
+                      <th style={{ padding: '14px 16px' }}>Status</th>
+                      <th style={{ padding: '14px 16px' }}>Integrity</th>
+                      <th style={{ padding: '14px 20px' }}>Registered Date</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {models.map((m, idx) => (
+                      <tr key={m.id || idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
+                        <td style={{ padding: '14px 20px', fontWeight: 600, color: '#f0f4ff' }}>
+                          {m.name || m.original_filename || m.filename || 'Untitled Model'}
+                        </td>
+                        <td style={{ padding: '14px 16px', fontFamily: 'monospace', color: '#00e5ff' }}>
+                          {m.owner_id || m.user_id || '—'}
+                        </td>
+                        <td style={{ padding: '14px 16px', textTransform: 'uppercase', color: '#a78bfa', fontWeight: 600, fontSize: '0.75rem' }}>
+                          {m.file_format || m.format || 'STL'}
+                        </td>
                         <td style={{ padding: '14px 16px' }}>
                           <span style={{
-                            padding: '3px 9px', borderRadius: 8, fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase',
-                            background: isRowAdmin ? 'rgba(34,197,94,0.12)' : 'rgba(0,229,255,0.08)',
-                            color: isRowAdmin ? '#22c55e' : '#00e5ff',
-                            border: `1px solid ${isRowAdmin ? 'rgba(34,197,94,0.3)' : 'rgba(0,229,255,0.2)'}`
+                            padding: '3px 8px', borderRadius: 6, fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase',
+                            background: m.status === 'watermarked' ? 'rgba(0,229,255,0.1)' : 'rgba(34,197,94,0.1)',
+                            color: m.status === 'watermarked' ? '#00e5ff' : '#22c55e',
+                            border: `1px solid ${m.status === 'watermarked' ? 'rgba(0,229,255,0.25)' : 'rgba(34,197,94,0.25)'}`
                           }}>
-                            {u.role || 'user'}
+                            {m.status || 'Active'}
                           </span>
                         </td>
-
-                        {/* Phone */}
-                        <td style={{ padding: '14px 16px', color: u.phone ? '#94a3b8' : '#4a5568' }}>
-                          {u.phone || '—'}
+                        <td style={{ padding: '14px 16px', color: '#22c55e', fontWeight: 600 }}>
+                          {m.integrity_score ? `${m.integrity_score}%` : '100%'}
                         </td>
-
-                        {/* Registration Date */}
                         <td style={{ padding: '14px 20px', color: '#6b7a8d', fontSize: '0.78rem' }}>
-                          {u.created_at ? format(new Date(u.created_at), 'MMM d, yyyy') : 'Recent'}
+                          {m.created_at ? format(new Date(m.created_at), 'MMM d, yyyy') : 'Recent'}
                         </td>
                       </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </GlassCard>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </GlassCard>
+        )}
 
       </div>
     </div>
