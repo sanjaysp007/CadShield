@@ -460,6 +460,87 @@ export function saveProjectToStorage(proj) {
   } catch (_) {}
 }
 
+export async function toggleProjectGlobalSharing(projectId, isPublic) {
+  if (!projectId) return null
+
+  // 1. Update in local storage
+  let updatedProj = null
+  try {
+    const list = getStoredProjects()
+    const idx = list.findIndex(p =>
+      p.id === projectId ||
+      p.project_id === projectId ||
+      (p.project_id && p.project_id.toUpperCase() === String(projectId).toUpperCase())
+    )
+    if (idx >= 0) {
+      list[idx].is_public = isPublic
+      list[idx].updated_at = new Date().toISOString()
+      updatedProj = list[idx]
+      localStorage.setItem('cadshield_projects', JSON.stringify(list))
+    }
+  } catch (_) {}
+
+  // 2. Sync to Supabase models table
+  try {
+    const { data, error } = await supabase
+      .from('models')
+      .update({ is_public: isPublic })
+      .or(`id.eq.${projectId},project_id.eq.${projectId}`)
+      .select()
+    if (!error && data && data.length > 0) {
+      updatedProj = { ...updatedProj, ...data[0] }
+    }
+  } catch (err) {
+    console.warn('Supabase global sharing update error (local updated):', err)
+  }
+
+  // 3. Dispatch events so all tabs and views update immediately
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('cadshield-projects-updated'))
+    window.dispatchEvent(new CustomEvent('cadshield-global-projects-updated', { detail: { projectId, isPublic } }))
+  }
+
+  return updatedProj
+}
+
+export async function getGlobalProjects() {
+  let list = []
+
+  // 1. Try Supabase for approved public models
+  try {
+    const { data, error } = await supabase
+      .from('models')
+      .select('*')
+      .eq('is_public', true)
+      .order('created_at', { ascending: false })
+      .limit(100)
+
+    if (!error && Array.isArray(data) && data.length > 0) {
+      list = [...data]
+    }
+  } catch (err) {
+    console.warn('getGlobalProjects supabase error:', err)
+  }
+
+  // 2. Merge with locally stored approved projects
+  const stored = getStoredProjects()
+  for (const sp of stored) {
+    if (sp.is_public === true) {
+      const existingIdx = list.findIndex(p =>
+        (p.id && sp.id && p.id === sp.id) ||
+        (p.project_id && sp.project_id && p.project_id === sp.project_id)
+      )
+      if (existingIdx === -1) {
+        list.push(sp)
+      } else {
+        list[existingIdx] = { ...list[existingIdx], ...sp }
+      }
+    }
+  }
+
+  return list.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0))
+}
+
 export async function getAdminUsers() {
   let list = []
   try {

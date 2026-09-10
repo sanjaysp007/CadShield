@@ -63,16 +63,16 @@ export default function ProjectVerifyPage() {
           <div style={{
             display: 'inline-flex', alignItems: 'center', gap: 8,
             padding: '6px 14px', borderRadius: 99,
-            background: 'rgba(0,229,255,0.08)', border: '1px solid rgba(0,229,255,0.2)',
-            color: '#00e5ff', fontSize: '0.78rem', fontWeight: 600, marginBottom: 14,
+            background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.3)',
+            color: '#f87171', fontSize: '0.78rem', fontWeight: 700, marginBottom: 14,
           }}>
-            <ShieldCheck size={14} /> Cryptographic Proof of Authorship
+            <ShieldCheck size={14} /> Admin Verification Authority
           </div>
           <h1 style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: '2.2rem', fontWeight: 800, color: '#f0f4ff', letterSpacing: '-0.02em', marginBottom: 8 }}>
             CAD Project <span style={{ background: 'linear-gradient(135deg, #00e5ff, #8b5cf6)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>Verification</span>
           </h1>
-          <p style={{ color: '#6b7a8d', fontSize: '0.9rem', maxWidth: 540, margin: '0 auto' }}>
-            Verify the authenticity of any physical or digital 3D model using its unique Project ID.
+          <p style={{ color: '#94a3b8', fontSize: '0.9rem', maxWidth: 540, margin: '0 auto' }}>
+            Official administrator portal for authenticating registered 3D CAD projects, owner credentials, and embedded watermark signatures.
           </p>
         </div>
 

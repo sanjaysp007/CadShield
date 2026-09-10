@@ -41,8 +41,8 @@ export default function CreatorPage() {
 
         {/* Back navigation */}
         <div style={{ marginBottom: 24 }}>
-          <Link to="/verify-project" style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 8, color: '#6b7a8d', fontSize: '0.85rem' }}>
-            <ArrowLeft size={16} /> Back to Project Verification
+          <Link to="/global-search" style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 8, color: '#6b7a8d', fontSize: '0.85rem' }}>
+            <ArrowLeft size={16} /> Back to Global Search
           </Link>
         </div>
 
@@ -54,8 +54,8 @@ export default function CreatorPage() {
           <GlassCard style={{ padding: 48, textAlign: 'center' }}>
             <h2 style={{ fontFamily: "'Space Grotesk', sans-serif", color: '#f0f4ff', marginBottom: 8 }}>Creator Not Found</h2>
             <p style={{ color: '#6b7a8d', marginBottom: 20 }}>No creator profile matches ID "{userId}".</p>
-            <Link to="/verify-project" style={{ textDecoration: 'none' }}>
-              <NeonButton variant="secondary">Verify Another Project</NeonButton>
+            <Link to="/global-search" style={{ textDecoration: 'none' }}>
+              <NeonButton variant="secondary">Back to Global Search</NeonButton>
             </Link>
           </GlassCard>
         ) : (
@@ -167,9 +167,9 @@ export default function CreatorPage() {
                         <span style={{ fontSize: '0.72rem', color: '#4a5568' }}>
                           {p.created_at ? new Date(p.created_at).toLocaleDateString() : 'Active'}
                         </span>
-                        <Link to={`/verify-project?id=${p.project_id}`} style={{ textDecoration: 'none' }}>
+                        <Link to={`/viewer?id=${encodeURIComponent(p.id || '')}&projectId=${encodeURIComponent(p.project_id || '')}`} style={{ textDecoration: 'none' }}>
                           <span style={{ fontSize: '0.78rem', color: '#00e5ff', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
-                            Verify <ExternalLink size={12} />
+                            3D View <ExternalLink size={12} />
                           </span>
                         </Link>
                       </div>

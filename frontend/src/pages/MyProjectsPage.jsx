@@ -4,24 +4,32 @@ import { motion } from 'framer-motion'
 import {
   FolderLock, Search, Plus, Download, Eye, CheckCircle,
   ExternalLink, Calendar, ShieldCheck, RefreshCw, Sparkles, Copy, Check,
-  Shield, Bell, MessageSquare, AlertCircle
+  Shield, Bell, MessageSquare, AlertCircle, Globe, Lock
 } from 'lucide-react'
 import { format } from 'date-fns'
 import toast from 'react-hot-toast'
 import GlassCard from '../components/GlassCard'
 import NeonButton from '../components/NeonButton'
-import { getMyProjects, downloadWatermarkedModel, getUserNotifications, markNotificationAsRead } from '../utils/api'
+import {
+  getMyProjects,
+  downloadWatermarkedModel,
+  getUserNotifications,
+  markNotificationAsRead,
+  toggleProjectGlobalSharing
+} from '../utils/api'
 import { getUser } from '../utils/auth'
 
 export default function MyProjectsPage() {
   const navigate = useNavigate()
   const user = getUser() || {}
+  const isAdminUser = user?.role === 'admin' || user?.role === 'main_admin'
   const [projects, setProjects] = useState([])
   const [notifications, setNotifications] = useState([])
   const [loading, setLoading] = useState(true)
   const [query, setQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState('ALL')
   const [copiedId, setCopiedId] = useState(null)
+  const [togglingId, setTogglingId] = useState(null)
 
   const loadNotifs = async () => {
     if (!user) return
@@ -67,6 +75,30 @@ export default function MyProjectsPage() {
     setCopiedId(pid)
     toast.success('Project ID copied to clipboard!')
     setTimeout(() => setCopiedId(null), 2500)
+  }
+
+  const handleToggleGlobal = async (proj) => {
+    const pid = proj.id || proj.project_id
+    const newStatus = !proj.is_public
+    setTogglingId(pid)
+    try {
+      await toggleProjectGlobalSharing(pid, newStatus)
+      setProjects(prev => prev.map(p => {
+        if (p.id === pid || p.project_id === pid) {
+          return { ...p, is_public: newStatus }
+        }
+        return p
+      }))
+      if (newStatus) {
+        toast.success('Project Approved! Now live in Global Search for everyone to view & download.')
+      } else {
+        toast.success('Project marked Private. Only visible to you in My Projects.')
+      }
+    } catch (err) {
+      toast.error('Failed to update public sharing status')
+    } finally {
+      setTogglingId(null)
+    }
   }
 
   const handleDownload = async (modelId, project) => {
@@ -270,12 +302,32 @@ export default function MyProjectsPage() {
                     <div>
                       {/* Top status bar */}
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-                        <span style={{
-                          padding: '4px 10px', borderRadius: 8, fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase',
-                          background: statusColors.bg, color: statusColors.text, border: `1px solid ${statusColors.border}`
-                        }}>
-                          {proj.status || 'UPLOADED'}
-                        </span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span style={{
+                            padding: '4px 10px', borderRadius: 8, fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase',
+                            background: statusColors.bg, color: statusColors.text, border: `1px solid ${statusColors.border}`
+                          }}>
+                            {proj.status || 'UPLOADED'}
+                          </span>
+
+                          {proj.is_public ? (
+                            <span style={{
+                              padding: '4px 8px', borderRadius: 8, fontSize: '0.68rem', fontWeight: 800, textTransform: 'uppercase',
+                              background: 'rgba(34,197,94,0.12)', color: '#22c55e', border: '1px solid rgba(34,197,94,0.3)',
+                              display: 'inline-flex', alignItems: 'center', gap: 4,
+                            }}>
+                              <Globe size={11} /> Global
+                            </span>
+                          ) : (
+                            <span style={{
+                              padding: '4px 8px', borderRadius: 8, fontSize: '0.68rem', fontWeight: 700, textTransform: 'uppercase',
+                              background: 'rgba(255,255,255,0.04)', color: '#94a3b8', border: '1px solid rgba(255,255,255,0.08)',
+                              display: 'inline-flex', alignItems: 'center', gap: 4,
+                            }}>
+                              <Lock size={11} /> Private
+                            </span>
+                          )}
+                        </div>
 
                         <span style={{ fontSize: '0.72rem', color: '#94a3b8', display: 'flex', alignItems: 'center', gap: 4 }}>
                           <Calendar size={12} />
@@ -323,6 +375,36 @@ export default function MyProjectsPage() {
                           <div style={{ fontSize: '0.65rem', color: '#94a3b8', textTransform: 'uppercase' }}>Integrity</div>
                           <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#22c55e' }}>{proj.integrity_score ? `${proj.integrity_score}%` : '100%'}</div>
                         </div>
+                      </div>
+
+                      {/* Creator Global Approval / Sharing Toggle */}
+                      <div style={{ marginBottom: 14 }}>
+                        <button
+                          onClick={() => handleToggleGlobal(proj)}
+                          disabled={togglingId === (proj.id || proj.project_id)}
+                          style={{
+                            width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                            padding: '7px 12px', borderRadius: 10,
+                            background: proj.is_public ? 'rgba(239,68,68,0.08)' : 'rgba(0,229,255,0.08)',
+                            border: proj.is_public ? '1px solid rgba(239,68,68,0.25)' : '1px solid rgba(0,229,255,0.25)',
+                            color: proj.is_public ? '#f87171' : '#00e5ff',
+                            fontSize: '0.76rem', fontWeight: 700, cursor: 'pointer',
+                            transition: 'all 0.2s',
+                          }}
+                          onMouseEnter={e => e.currentTarget.style.background = proj.is_public ? 'rgba(239,68,68,0.16)' : 'rgba(0,229,255,0.16)'}
+                          onMouseLeave={e => e.currentTarget.style.background = proj.is_public ? 'rgba(239,68,68,0.08)' : 'rgba(0,229,255,0.08)'}
+                          title={proj.is_public ? 'Click to make model private' : 'Click to approve and publish to Global Search'}
+                        >
+                          {proj.is_public ? (
+                            <>
+                              <Lock size={12} /> Approved for Global · Click to Make Private
+                            </>
+                          ) : (
+                            <>
+                              <Globe size={12} /> Approve for Global Search &rarr;
+                            </>
+                          )}
+                        </button>
                       </div>
 
                       {/* CadShield Team Project Advisory */}
@@ -416,7 +498,8 @@ export default function MyProjectsPage() {
                         </button>
                       </Link>
 
-                      {proj.project_id && (
+                      {/* Only Admins can verify CAD models */}
+                      {isAdminUser && proj.project_id && (
                         <Link to={`/verify-project?id=${proj.project_id}`} style={{ textDecoration: 'none' }}>
                           <button
                             style={{
@@ -425,9 +508,9 @@ export default function MyProjectsPage() {
                               color: '#22c55e', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer',
                               display: 'flex', alignItems: 'center', gap: 6,
                             }}
-                            title="Verify Project Authenticity"
+                            title="Admin Verification"
                           >
-                            <ShieldCheck size={14} /> Verify
+                            <ShieldCheck size={14} /> Verify (Admin)
                           </button>
                         </Link>
                       )}

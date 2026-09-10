@@ -16,6 +16,7 @@ import MyProjectsPage     from './pages/MyProjectsPage'
 import ProjectVerifyPage  from './pages/ProjectVerifyPage'
 import CreatorPage        from './pages/CreatorPage'
 import AdminDashboard     from './pages/AdminDashboard'
+import GlobalSearchPage   from './pages/GlobalSearchPage'
 import { isLoggedIn, isAdmin, initSupabaseSession } from './utils/auth'
 
 // ── Protected route wrapper ───────────────────────────
@@ -61,16 +62,17 @@ function AppRoutes() {
           {/* Public */}
           <Route path="/"                 element={<LandingPage />} />
           <Route path="/login"            element={<LoginPage />} />
-          <Route path="/verify-project"   element={<ProjectVerifyPage />} />
+          <Route path="/global-search"    element={<GlobalSearchPage />} />
           <Route path="/creator/:userId"  element={<CreatorPage />} />
 
           {/* Protected */}
           <Route path="/dashboard"    element={<Protected><Dashboard /></Protected>} />
           <Route path="/admin"        element={<AdminProtected><AdminDashboard /></AdminProtected>} />
+          <Route path="/verify-project" element={<AdminProtected><ProjectVerifyPage /></AdminProtected>} />
+          <Route path="/verify"       element={<AdminProtected><VerifyPage /></AdminProtected>} />
           <Route path="/profile"      element={<Protected><ProfilePage /></Protected>} />
           <Route path="/my-projects"  element={<Protected><MyProjectsPage /></Protected>} />
           <Route path="/embed"        element={<Protected><EmbedPage /></Protected>} />
-          <Route path="/verify"       element={<Protected><VerifyPage /></Protected>} />
           <Route path="/viewer"       element={<Protected><ViewerPage /></Protected>} />
           <Route path="/analytics"    element={<Protected><AnalyticsPage /></Protected>} />
           <Route path="/history"      element={<Protected><HistoryPage /></Protected>} />

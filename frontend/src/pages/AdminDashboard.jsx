@@ -784,6 +784,24 @@ export default function AdminDashboard() {
                               <Send size={11} /> Reach Out
                             </button>
 
+                            {m.project_id && (
+                              <Link to={`/verify-project?id=${m.project_id}`} style={{ textDecoration: 'none' }}>
+                                <button
+                                  style={{
+                                    padding: '5px 10px', borderRadius: 6, fontSize: '0.72rem', fontWeight: 600,
+                                    background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.25)',
+                                    color: '#22c55e', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4,
+                                    transition: 'all 0.2s',
+                                  }}
+                                  onMouseEnter={e => e.currentTarget.style.background = 'rgba(34,197,94,0.18)'}
+                                  onMouseLeave={e => e.currentTarget.style.background = 'rgba(34,197,94,0.1)'}
+                                  title="Admin Model Verification"
+                                >
+                                  <ShieldCheck size={12} /> Verify
+                                </button>
+                              </Link>
+                            )}
+
                             <Link to={`/viewer?id=${encodeURIComponent(m.id || '')}&projectId=${encodeURIComponent(m.project_id || '')}`} style={{ textDecoration: 'none' }}>
                               <button style={{
                                 padding: '5px 8px', borderRadius: 6, fontSize: '0.72rem', fontWeight: 500,

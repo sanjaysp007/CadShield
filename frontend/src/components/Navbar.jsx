@@ -5,7 +5,7 @@ import {
   Shield, LayoutDashboard, Lock, CheckCircle,
   FolderLock, History, Menu, X, Eye, LogOut,
   ChevronDown, Copy, Check, User, Settings, ShieldCheck, ShieldAlert,
-  Bell, BellRing, MessageSquare, ExternalLink, Box, CheckCheck
+  Bell, BellRing, MessageSquare, ExternalLink, Box, CheckCheck, Globe
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { getUser, logout, syncCurrentUserRole } from '../utils/auth'
@@ -554,13 +554,14 @@ export default function Navbar() {
 
   const isAdminUser = user?.role === 'admin' || user?.role === 'main_admin'
   const navItems = [
-    { to: '/dashboard',      label: 'Dashboard',   icon: LayoutDashboard },
+    { to: '/dashboard',      label: 'Dashboard',     icon: LayoutDashboard },
     ...(isAdminUser ? [{ to: '/admin', label: 'Admin Panel', icon: ShieldAlert, isSpecial: true }] : []),
-    { to: '/embed',          label: 'Protect',     icon: Lock },
-    { to: '/my-projects',    label: 'My Projects', icon: FolderLock },
-    { to: '/verify-project', label: 'Verify',      icon: ShieldCheck },
-    { to: '/viewer',         label: 'Viewer',      icon: Eye },
-    { to: '/history',        label: 'History',     icon: History },
+    { to: '/global-search',  label: 'Global Search', icon: Globe },
+    { to: '/my-projects',    label: 'My Projects',   icon: FolderLock },
+    { to: '/embed',          label: 'Protect',       icon: Lock },
+    ...(isAdminUser ? [{ to: '/verify-project', label: 'Verify', icon: ShieldCheck }] : []),
+    { to: '/viewer',         label: 'Viewer',        icon: Eye },
+    { to: '/history',        label: 'History',       icon: History },
   ]
 
   return (

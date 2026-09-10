@@ -14,7 +14,7 @@ import ModelUploader from '../components/ModelUploader'
 import ProcessingAnimation from '../components/ProcessingAnimation'
 import SecurityScore from '../components/SecurityScore'
 import { uploadModel, embedWatermark, downloadWatermarkedModel } from '../utils/api'
-import { getUser } from '../utils/auth'
+import { getUser, isAdmin } from '../utils/auth'
 
 /* ── Shared sub-components ──────────────────────────── */
 function Section({ title, icon: Icon, color = '#00e5ff', children }) {
@@ -409,11 +409,19 @@ export default function EmbedPage() {
                       </NeonButton>
                     </Link>
 
-                    <Link to={`/verify-project?id=${result.project_id || form.model_id_str}`} style={{ textDecoration: 'none' }}>
-                      <NeonButton variant="ghost" size="lg">
-                        Verify Authenticity
-                      </NeonButton>
-                    </Link>
+                    {isAdmin() ? (
+                      <Link to={`/verify-project?id=${result.project_id || form.model_id_str}`} style={{ textDecoration: 'none' }}>
+                        <NeonButton variant="ghost" size="lg">
+                          Verify Authenticity (Admin)
+                        </NeonButton>
+                      </Link>
+                    ) : (
+                      <Link to="/global-search" style={{ textDecoration: 'none' }}>
+                        <NeonButton variant="ghost" size="lg">
+                          Explore Global Search
+                        </NeonButton>
+                      </Link>
+                    )}
 
                     <NeonButton variant="ghost" icon={RefreshCw} onClick={reset} size="lg">
                       Protect Another Model

@@ -103,11 +103,16 @@ CREATE TABLE IF NOT EXISTS public.models (
   face_count INTEGER DEFAULT 0,
   processing_time NUMERIC DEFAULT 0.0,
   status TEXT DEFAULT 'uploaded',
+  is_public BOOLEAN DEFAULT false,
   created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL,
   updated_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now())
 );
 
+-- Ensure is_public exists if table was already created
+ALTER TABLE public.models ADD COLUMN IF NOT EXISTS is_public BOOLEAN DEFAULT false;
+
 CREATE INDEX IF NOT EXISTS idx_models_owner_id ON public.models(owner_id);
+CREATE INDEX IF NOT EXISTS idx_models_is_public ON public.models(is_public);
 CREATE INDEX IF NOT EXISTS idx_models_status ON public.models(status);
 CREATE INDEX IF NOT EXISTS idx_models_created_at ON public.models(created_at);
 

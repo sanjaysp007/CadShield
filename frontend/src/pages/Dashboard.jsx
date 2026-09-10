@@ -5,7 +5,7 @@ import {
   Shield, Fingerprint, CheckCircle, AlertTriangle,
   Activity, Percent, RefreshCw, Lock, Eye, TrendingUp, Zap,
   User, FolderLock, Plus, ShieldCheck, LogOut, Settings,
-  ChevronDown, Copy, Check, ExternalLink, Download, Mail, ShieldAlert
+  ChevronDown, Copy, Check, ExternalLink, Download, Mail, ShieldAlert, Globe
 } from 'lucide-react'
 import {
   Chart as ChartJS, CategoryScale, LinearScale, PointElement,
@@ -227,6 +227,7 @@ export default function Dashboard() {
   })
 
   const photoSrc = getAssetUrl(user?.profile_photo)
+  const isAdminUser = user?.role === 'admin' || user?.role === 'main_admin'
 
   const initials = (user?.full_name || 'CAD User')
     .split(' ')
@@ -351,11 +352,19 @@ export default function Dashboard() {
                   </NeonButton>
                 </Link>
 
-                <Link to="/verify-project" style={{ textDecoration: 'none' }}>
-                  <NeonButton variant="secondary" icon={ShieldCheck} size="sm">
-                    Verify Project
-                  </NeonButton>
-                </Link>
+                {isAdminUser ? (
+                  <Link to="/verify-project" style={{ textDecoration: 'none' }}>
+                    <NeonButton variant="secondary" icon={ShieldCheck} size="sm">
+                      Verify Project (Admin)
+                    </NeonButton>
+                  </Link>
+                ) : (
+                  <Link to="/global-search" style={{ textDecoration: 'none' }}>
+                    <NeonButton variant="secondary" icon={Globe} size="sm">
+                      Global Search
+                    </NeonButton>
+                  </Link>
+                )}
 
                 <Link to="/profile" style={{ textDecoration: 'none' }}>
                   <NeonButton variant="ghost" icon={User} size="sm">
@@ -571,11 +580,13 @@ export default function Dashboard() {
                         </td>
                         <td style={{ padding: '12px 14px', textAlign: 'right' }}>
                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 6 }}>
-                            <Link to={`/verify-project?id=${p.project_id}`} style={{ textDecoration: 'none' }}>
-                              <button style={{ padding: '5px 10px', borderRadius: 8, background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.2)', color: '#22c55e', fontSize: '0.75rem', cursor: 'pointer' }}>
-                                Verify
-                              </button>
-                            </Link>
+                            {isAdminUser && (
+                              <Link to={`/verify-project?id=${p.project_id}`} style={{ textDecoration: 'none' }}>
+                                <button style={{ padding: '5px 10px', borderRadius: 8, background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.2)', color: '#22c55e', fontSize: '0.75rem', cursor: 'pointer' }}>
+                                  Verify
+                                </button>
+                              </Link>
+                            )}
                             <Link to="/viewer" style={{ textDecoration: 'none' }}>
                               <button style={{ padding: '5px 10px', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', color: '#8892a4', fontSize: '0.75rem', cursor: 'pointer' }}>
                                 View

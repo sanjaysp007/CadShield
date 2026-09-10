@@ -11,6 +11,7 @@ import toast from 'react-hot-toast'
 import GlassCard from '../components/GlassCard'
 import NeonButton from '../components/NeonButton'
 import { getModels, deleteModel } from '../utils/api'
+import { isAdmin } from '../utils/auth'
 
 const PER_PAGE = 12
 
@@ -267,12 +268,12 @@ export default function HistoryPage() {
                               color: '#00e5ff',
                               action: () => navigate(`/viewer?id=${encodeURIComponent(m.id || '')}&projectId=${encodeURIComponent(m.project_id || m.model_id_str || '')}`)
                             },
-                            {
+                            ...(isAdmin() ? [{
                               icon: CheckCircle,
-                              title: 'Verify',
+                              title: 'Verify (Admin)',
                               color: '#22c55e',
                               action: () => navigate(m.project_id ? `/verify-project?id=${encodeURIComponent(m.project_id)}` : '/verify')
-                            },
+                            }] : []),
                             {
                               icon: Trash2,
                               title: 'Delete',
