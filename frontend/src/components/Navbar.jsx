@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
@@ -9,11 +9,10 @@ import {
 import { getUser, logout } from '../utils/auth'
 import { getAssetUrl } from '../utils/api'
 
-
-
 function UserMenu({ user }) {
   const [open, setOpen] = useState(false)
   const [copied, setCopied] = useState(false)
+  const menuRef = useRef(null)
 
   const copyId = (e) => {
     e.stopPropagation()
@@ -26,9 +25,14 @@ function UserMenu({ user }) {
   }
 
   useEffect(() => {
-    const close = () => setOpen(false)
-    if (open) document.addEventListener('click', close)
-    return () => document.removeEventListener('click', close)
+    if (!open) return
+    const handleClickOutside = (e) => {
+      if (menuRef.current && !menuRef.current.contains(e.target)) {
+        setOpen(false)
+      }
+    }
+    document.addEventListener('pointerdown', handleClickOutside)
+    return () => document.removeEventListener('pointerdown', handleClickOutside)
   }, [open])
 
   const photoSrc = getAssetUrl(user?.profile_photo)
@@ -41,7 +45,7 @@ function UserMenu({ user }) {
     .toUpperCase()
 
   return (
-    <div style={{ position: 'relative' }}>
+    <div ref={menuRef} style={{ position: 'relative' }}>
       <button
         onClick={() => setOpen(v => !v)}
         style={{
@@ -77,7 +81,7 @@ function UserMenu({ user }) {
             {user.user_id || user.owner_id}
           </div>
         </div>
-        <ChevronDown size={13} style={{ color: '#6b7a8d', transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+        <ChevronDown size={13} style={{ color: '#94a3b8', transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
       </button>
 
       <AnimatePresence>
@@ -97,16 +101,16 @@ function UserMenu({ user }) {
             {/* User info Header */}
             <div style={{ padding: '4px 6px 12px', borderBottom: '1px solid rgba(255,255,255,0.06)', marginBottom: 8 }}>
               <p style={{ fontSize: '0.85rem', fontWeight: 700, color: '#f0f4ff', marginBottom: 2 }}>{user.full_name}</p>
-              <p style={{ fontSize: '0.72rem', color: '#6b7a8d', marginBottom: 8 }}>{user.email}</p>
+              <p style={{ fontSize: '0.72rem', color: '#94a3b8', marginBottom: 8 }}>{user.email}</p>
 
               {/* User ID display with copy */}
               <div style={{ padding: '6px 10px', borderRadius: 8, background: 'rgba(0,229,255,0.04)', border: '1px solid rgba(0,229,255,0.12)' }}>
-                <div style={{ fontSize: '0.62rem', color: '#6b7a8d', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 2 }}>User ID</div>
+                <div style={{ fontSize: '0.62rem', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 2 }}>User ID</div>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
                   <span style={{ fontFamily: 'monospace', fontSize: '0.8rem', fontWeight: 700, color: '#00e5ff' }}>
                     {user.user_id || user.owner_id}
                   </span>
-                  <button onClick={copyId} style={{ background: 'none', border: 'none', cursor: 'pointer', color: copied ? '#22c55e' : '#6b7a8d', padding: 2 }}>
+                  <button onClick={copyId} style={{ background: 'none', border: 'none', cursor: 'pointer', color: copied ? '#22c55e' : '#94a3b8', padding: 2 }}>
                     {copied ? <Check size={12} /> : <Copy size={12} />}
                   </button>
                 </div>

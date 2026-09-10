@@ -80,6 +80,7 @@ export default function AdminDashboard() {
     const newRole = targetUser.role === 'admin' ? 'user' : 'admin'
     setUpdatingId(targetUser.id)
     try {
+      setUsers(prev => prev.map(u => (u.id === targetUser.id || u.user_id === targetUser.user_id) ? { ...u, role: newRole } : u))
       await updateUserRole(targetUser.id, newRole)
       toast.success(`User ${targetUser.name || targetUser.email} role updated to ${newRole.toUpperCase()}!`)
       loadAllData()
@@ -141,12 +142,12 @@ export default function AdminDashboard() {
                 Access Denied: Admin Only
               </h2>
 
-              <p style={{ color: '#8892a4', fontSize: '0.9rem', lineHeight: 1.6, marginBottom: 24 }}>
+              <p style={{ color: '#cbd5e1', fontSize: '0.9rem', lineHeight: 1.6, marginBottom: 24 }}>
                 The Admin Dashboard is restricted to authorized administrative users with the <strong style={{ color: '#f43f5e' }}>admin</strong> role.
                 Your current account (<span style={{ color: '#00e5ff' }}>{currentUser.email || 'Current User'}</span>) does not have administrative permissions.
               </p>
 
-              <div style={{ padding: '14px 18px', borderRadius: 12, background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', marginBottom: 28, textAlign: 'left', fontSize: '0.8rem', color: '#6b7a8d' }}>
+              <div style={{ padding: '14px 18px', borderRadius: 12, background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', marginBottom: 28, textAlign: 'left', fontSize: '0.8rem', color: '#94a3b8' }}>
                 <div style={{ fontWeight: 600, color: '#f0f4ff', marginBottom: 4 }}>How to gain admin access:</div>
                 Execute in your Supabase SQL Editor:
                 <pre style={{ margin: '8px 0 0', padding: '8px 10px', background: '#070a17', borderRadius: 8, color: '#00e5ff', fontFamily: 'monospace', overflowX: 'auto' }}>
@@ -187,7 +188,7 @@ export default function AdminDashboard() {
             <h1 style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 'clamp(1.5rem, 4vw, 2.2rem)', fontWeight: 800, color: '#f0f4ff', letterSpacing: '-0.02em', marginBottom: 4 }}>
               Admin <span style={{ background: 'linear-gradient(135deg, #00e5ff, #8b5cf6)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>Dashboard</span>
             </h1>
-            <p style={{ color: '#6b7a8d', fontSize: '0.86rem', lineHeight: 1.5 }}>
+            <p style={{ color: '#94a3b8', fontSize: '0.86rem', lineHeight: 1.5 }}>
               Full administrative view into registered users, authentic database statistics, and registered CADShield projects.
             </p>
           </div>
@@ -199,7 +200,7 @@ export default function AdminDashboard() {
                 display: 'flex', alignItems: 'center', gap: 6,
                 padding: '9px 16px', borderRadius: 12,
                 background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)',
-                color: '#8892a4', fontSize: '0.82rem', cursor: 'pointer',
+                color: '#cbd5e1', fontSize: '0.82rem', cursor: 'pointer',
                 transition: 'all 0.2s',
               }}
             >
@@ -233,7 +234,7 @@ export default function AdminDashboard() {
                   fontWeight: 650, fontSize: '0.85rem', transition: 'all 0.2s', flexShrink: 0,
                   whiteSpace: 'nowrap',
                   background: active ? 'rgba(0,229,255,0.12)' : 'rgba(255,255,255,0.02)',
-                  color: active ? '#00e5ff' : '#6b7a8d',
+                  color: active ? '#00e5ff' : '#94a3b8',
                   boxShadow: active ? 'inset 0 0 0 1px rgba(0,229,255,0.3)' : 'none',
                 }}
               >
@@ -250,7 +251,7 @@ export default function AdminDashboard() {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16, marginBottom: 24 }}>
               <GlassCard style={{ padding: '20px 24px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                  <span style={{ fontSize: '0.75rem', color: '#6b7a8d', textTransform: 'uppercase', fontWeight: 600 }}>Total Registered Users</span>
+                  <span style={{ fontSize: '0.75rem', color: '#94a3b8', textTransform: 'uppercase', fontWeight: 600 }}>Total Registered Users</span>
                   <Users size={18} style={{ color: '#00e5ff' }} />
                 </div>
                 <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: '1.8rem', fontWeight: 800, color: '#f0f4ff' }}>
@@ -260,7 +261,7 @@ export default function AdminDashboard() {
 
               <GlassCard style={{ padding: '20px 24px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                  <span style={{ fontSize: '0.75rem', color: '#6b7a8d', textTransform: 'uppercase', fontWeight: 600 }}>Administrators</span>
+                  <span style={{ fontSize: '0.75rem', color: '#94a3b8', textTransform: 'uppercase', fontWeight: 600 }}>Administrators</span>
                   <ShieldCheck size={18} style={{ color: '#22c55e' }} />
                 </div>
                 <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: '1.8rem', fontWeight: 800, color: '#22c55e' }}>
@@ -270,7 +271,7 @@ export default function AdminDashboard() {
 
               <GlassCard style={{ padding: '20px 24px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                  <span style={{ fontSize: '0.75rem', color: '#6b7a8d', textTransform: 'uppercase', fontWeight: 600 }}>Standard Users</span>
+                  <span style={{ fontSize: '0.75rem', color: '#94a3b8', textTransform: 'uppercase', fontWeight: 600 }}>Standard Users</span>
                   <UserCheck size={18} style={{ color: '#a78bfa' }} />
                 </div>
                 <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: '1.8rem', fontWeight: 800, color: '#a78bfa' }}>
@@ -282,7 +283,7 @@ export default function AdminDashboard() {
             {/* Search & Filter Bar */}
             <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap', alignItems: 'center' }}>
               <div style={{ position: 'relative', flex: 1, minWidth: 220, width: '100%' }}>
-                <Search size={16} style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: '#4a5568' }} />
+                <Search size={16} style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
                 <input
                   type="text"
                   value={query}
@@ -306,7 +307,7 @@ export default function AdminDashboard() {
                     style={{
                       padding: '8px 16px', borderRadius: 9, fontSize: '0.78rem', fontWeight: 600, border: 'none', cursor: 'pointer',
                       background: roleFilter === st ? 'rgba(0,229,255,0.12)' : 'transparent',
-                      color: roleFilter === st ? '#00e5ff' : '#6b7a8d',
+                      color: roleFilter === st ? '#00e5ff' : '#94a3b8',
                       boxShadow: roleFilter === st ? 'inset 0 0 0 1px rgba(0,229,255,0.3)' : 'none',
                       transition: 'all 0.2s',
                     }}
@@ -320,13 +321,13 @@ export default function AdminDashboard() {
             {/* Users Table */}
             <GlassCard style={{ padding: 0, overflow: 'hidden' }}>
               {loading ? (
-                <div style={{ padding: '64px 24px', textAlign: 'center', color: '#6b7a8d' }}>
+                <div style={{ padding: '64px 24px', textAlign: 'center', color: '#94a3b8' }}>
                   <RefreshCw size={28} style={{ animation: 'rotate-slow 1s linear infinite', color: '#00e5ff', margin: '0 auto 12px' }} />
                   <div>Fetching registered users from Supabase...</div>
                 </div>
               ) : filteredUsers.length === 0 ? (
-                <div style={{ padding: '64px 24px', textAlign: 'center', color: '#6b7a8d' }}>
-                  <Users size={36} style={{ color: '#374151', margin: '0 auto 12px' }} />
+                <div style={{ padding: '64px 24px', textAlign: 'center', color: '#94a3b8' }}>
+                  <Users size={36} style={{ color: '#64748b', margin: '0 auto 12px' }} />
                   <div style={{ fontSize: '1rem', fontWeight: 600, color: '#f0f4ff', marginBottom: 4 }}>No users found</div>
                   <div style={{ fontSize: '0.82rem' }}>No user matches the filter criteria or no profiles exist yet.</div>
                 </div>
@@ -334,7 +335,7 @@ export default function AdminDashboard() {
                 <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
                   <table style={{ width: '100%', minWidth: 720, borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.84rem' }}>
                     <thead>
-                      <tr style={{ background: 'rgba(255,255,255,0.02)', borderBottom: '1px solid rgba(255,255,255,0.06)', color: '#6b7a8d', fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                      <tr style={{ background: 'rgba(255,255,255,0.02)', borderBottom: '1px solid rgba(255,255,255,0.06)', color: '#94a3b8', fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                         <th style={{ padding: '14px 20px' }}>User</th>
                         <th style={{ padding: '14px 16px' }}>Owner / User ID</th>
                         <th style={{ padding: '14px 16px' }}>Email</th>
@@ -403,7 +404,7 @@ export default function AdminDashboard() {
                                 </span>
                                 <button
                                   onClick={() => copyUserId(u.user_id || u.id)}
-                                  style={{ background: 'none', border: 'none', color: copiedId === (u.user_id || u.id) ? '#22c55e' : '#4a5568', cursor: 'pointer', padding: 2 }}
+                                  style={{ background: 'none', border: 'none', color: copiedId === (u.user_id || u.id) ? '#22c55e' : '#94a3b8', cursor: 'pointer', padding: 2 }}
                                   title="Copy User ID"
                                 >
                                   {copiedId === (u.user_id || u.id) ? <Check size={12} /> : <Copy size={12} />}
@@ -444,12 +445,12 @@ export default function AdminDashboard() {
                             </td>
 
                             {/* Organization */}
-                            <td style={{ padding: '14px 16px', color: u.college_company ? '#cbd5e1' : '#4a5568' }}>
+                            <td style={{ padding: '14px 16px', color: u.college_company ? '#cbd5e1' : '#94a3b8' }}>
                               {u.college_company || '—'}
                             </td>
 
                             {/* Registration Date */}
-                            <td style={{ padding: '14px 16px', color: '#6b7a8d', fontSize: '0.78rem' }}>
+                            <td style={{ padding: '14px 16px', color: '#94a3b8', fontSize: '0.78rem' }}>
                               {u.created_at ? format(new Date(u.created_at), 'MMM d, yyyy') : 'Recent'}
                             </td>
 
@@ -479,10 +480,10 @@ export default function AdminDashboard() {
                                     {updatingId === u.id ? 'Saving...' : isRowAdmin ? 'Demote to User' : 'Promote to Admin'}
                                   </button>
                                 ) : (
-                                  <span style={{ color: '#6b7a8d', fontSize: '0.72rem' }}>You (Main Admin)</span>
+                                  <span style={{ color: '#94a3b8', fontSize: '0.72rem' }}>You (Main Admin)</span>
                                 )
                               ) : (
-                                <span style={{ color: '#4a5568', fontSize: '0.72rem' }}>
+                                <span style={{ color: '#94a3b8', fontSize: '0.72rem' }}>
                                   {isSelf ? 'You (Admin)' : 'Main Admin Managed'}
                                 </span>
                               )}
@@ -503,49 +504,49 @@ export default function AdminDashboard() {
           <div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16, marginBottom: 24 }}>
               <GlassCard style={{ padding: '20px 22px' }}>
-                <div style={{ fontSize: '0.72rem', color: '#6b7a8d', textTransform: 'uppercase', fontWeight: 600, marginBottom: 6 }}>
+                <div style={{ fontSize: '0.72rem', color: '#94a3b8', textTransform: 'uppercase', fontWeight: 600, marginBottom: 6 }}>
                   Total Platform Users
                 </div>
                 <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: '1.8rem', fontWeight: 800, color: '#00e5ff' }}>
                   {insights.totalUsers}
                 </div>
-                <div style={{ fontSize: '0.75rem', color: '#8892a4', marginTop: 4 }}>
+                <div style={{ fontSize: '0.75rem', color: '#cbd5e1', marginTop: 4 }}>
                   {insights.adminUsers} admin{insights.adminUsers === 1 ? '' : 's'}, {insights.standardUsers} standard
                 </div>
               </GlassCard>
 
               <GlassCard style={{ padding: '20px 22px' }}>
-                <div style={{ fontSize: '0.72rem', color: '#6b7a8d', textTransform: 'uppercase', fontWeight: 600, marginBottom: 6 }}>
+                <div style={{ fontSize: '0.72rem', color: '#94a3b8', textTransform: 'uppercase', fontWeight: 600, marginBottom: 6 }}>
                   Protected CAD Models
                 </div>
                 <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: '1.8rem', fontWeight: 800, color: '#a78bfa' }}>
                   {insights.totalModels}
                 </div>
-                <div style={{ fontSize: '0.75rem', color: '#8892a4', marginTop: 4 }}>
+                <div style={{ fontSize: '0.75rem', color: '#cbd5e1', marginTop: 4 }}>
                   {insights.watermarkedModels} embedded with HMAC-SHA256
                 </div>
               </GlassCard>
 
               <GlassCard style={{ padding: '20px 22px' }}>
-                <div style={{ fontSize: '0.72rem', color: '#6b7a8d', textTransform: 'uppercase', fontWeight: 600, marginBottom: 6 }}>
+                <div style={{ fontSize: '0.72rem', color: '#94a3b8', textTransform: 'uppercase', fontWeight: 600, marginBottom: 6 }}>
                   Verifications Executed
                 </div>
                 <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: '1.8rem', fontWeight: 800, color: '#22c55e' }}>
                   {insights.totalVerifications}
                 </div>
-                <div style={{ fontSize: '0.75rem', color: '#8892a4', marginTop: 4 }}>
+                <div style={{ fontSize: '0.75rem', color: '#cbd5e1', marginTop: 4 }}>
                   Authenticity checks logged
                 </div>
               </GlassCard>
 
               <GlassCard style={{ padding: '20px 22px' }}>
-                <div style={{ fontSize: '0.72rem', color: '#6b7a8d', textTransform: 'uppercase', fontWeight: 600, marginBottom: 6 }}>
+                <div style={{ fontSize: '0.72rem', color: '#94a3b8', textTransform: 'uppercase', fontWeight: 600, marginBottom: 6 }}>
                   Tampered Incidents
                 </div>
                 <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: '1.8rem', fontWeight: 800, color: insights.tamperedDetected > 0 ? '#f43f5e' : '#22c55e' }}>
                   {insights.tamperedDetected}
                 </div>
-                <div style={{ fontSize: '0.75rem', color: '#8892a4', marginTop: 4 }}>
+                <div style={{ fontSize: '0.75rem', color: '#cbd5e1', marginTop: 4 }}>
                   {insights.tamperedDetected === 0 ? 'No tampering detected' : 'Unauthorized modifications'}
                 </div>
               </GlassCard>
@@ -555,18 +556,18 @@ export default function AdminDashboard() {
               <h3 style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: '1.1rem', fontWeight: 700, color: '#f0f4ff', marginBottom: 12 }}>
                 Real-Time Security Metrics
               </h3>
-              <p style={{ color: '#8892a4', fontSize: '0.85rem', marginBottom: 20 }}>
+              <p style={{ color: '#cbd5e1', fontSize: '0.85rem', marginBottom: 20 }}>
                 These metrics reflect actual records stored in Supabase with Row Level Security.
               </p>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 16 }}>
                 <div style={{ padding: '16px 20px', borderRadius: 14, background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}>
-                  <div style={{ color: '#6b7a8d', fontSize: '0.75rem', fontWeight: 600, textTransform: 'uppercase', marginBottom: 6 }}>Average Model Integrity</div>
+                  <div style={{ color: '#94a3b8', fontSize: '0.75rem', fontWeight: 600, textTransform: 'uppercase', marginBottom: 6 }}>Average Model Integrity</div>
                   <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: '1.6rem', fontWeight: 800, color: '#00e5ff' }}>
                     {insights.avgIntegrity > 0 ? `${insights.avgIntegrity.toFixed(1)}%` : 'No data yet'}
                   </div>
                 </div>
                 <div style={{ padding: '16px 20px', borderRadius: 14, background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}>
-                  <div style={{ color: '#6b7a8d', fontSize: '0.75rem', fontWeight: 600, textTransform: 'uppercase', marginBottom: 6 }}>Database Storage State</div>
+                  <div style={{ color: '#94a3b8', fontSize: '0.75rem', fontWeight: 600, textTransform: 'uppercase', marginBottom: 6 }}>Database Storage State</div>
                   <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: '1.6rem', fontWeight: 800, color: '#22c55e' }}>
                     Connected
                   </div>
@@ -584,15 +585,15 @@ export default function AdminDashboard() {
                 <h3 style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: '1.1rem', fontWeight: 700, color: '#f0f4ff', margin: 0 }}>
                   Registered 3D Models & Files
                 </h3>
-                <p style={{ color: '#6b7a8d', fontSize: '0.8rem', margin: '4px 0 0' }}>
+                <p style={{ color: '#94a3b8', fontSize: '0.8rem', margin: '4px 0 0' }}>
                   Audited list of actual CAD projects protected across the platform.
                 </p>
               </div>
             </div>
 
             {models.length === 0 ? (
-              <div style={{ padding: '64px 24px', textAlign: 'center', color: '#6b7a8d' }}>
-                <Layers size={36} style={{ color: '#374151', margin: '0 auto 12px' }} />
+              <div style={{ padding: '64px 24px', textAlign: 'center', color: '#94a3b8' }}>
+                <Layers size={36} style={{ color: '#64748b', margin: '0 auto 12px' }} />
                 <div style={{ fontSize: '1rem', fontWeight: 600, color: '#f0f4ff', marginBottom: 4 }}>No models or projects registered yet</div>
                 <div style={{ fontSize: '0.82rem' }}>When users upload or watermark 3D models, they will appear here in real time.</div>
               </div>
@@ -600,7 +601,7 @@ export default function AdminDashboard() {
               <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
                 <table style={{ width: '100%', minWidth: 640, borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.84rem' }}>
                   <thead>
-                    <tr style={{ background: 'rgba(255,255,255,0.02)', borderBottom: '1px solid rgba(255,255,255,0.06)', color: '#6b7a8d', fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                    <tr style={{ background: 'rgba(255,255,255,0.02)', borderBottom: '1px solid rgba(255,255,255,0.06)', color: '#94a3b8', fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                       <th style={{ padding: '14px 20px' }}>Model / File Name</th>
                       <th style={{ padding: '14px 16px' }}>Owner ID</th>
                       <th style={{ padding: '14px 16px' }}>Format</th>
@@ -634,7 +635,7 @@ export default function AdminDashboard() {
                         <td style={{ padding: '14px 16px', color: '#22c55e', fontWeight: 600 }}>
                           {m.integrity_score ? `${m.integrity_score}%` : '100%'}
                         </td>
-                        <td style={{ padding: '14px 20px', color: '#6b7a8d', fontSize: '0.78rem' }}>
+                        <td style={{ padding: '14px 20px', color: '#94a3b8', fontSize: '0.78rem' }}>
                           {m.created_at ? format(new Date(m.created_at), 'MMM d, yyyy') : 'Recent'}
                         </td>
                       </tr>

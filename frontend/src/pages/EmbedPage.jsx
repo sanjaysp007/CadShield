@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   Shield, Download, RefreshCw, Copy, Check,
   FileText, Cpu, Info, Key, CheckCircle2, Lock, Fingerprint,
-  Building2, User, ExternalLink, Sparkles
+  Building2, User, ExternalLink, Sparkles, Upload
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import GlassCard from '../components/GlassCard'
@@ -36,9 +36,9 @@ function Section({ title, icon: Icon, color = '#00e5ff', children }) {
 function Field({ id, label, value, onChange, placeholder, disabled, hint, error }) {
   return (
     <div>
-      <label htmlFor={id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.8rem', fontWeight: 600, color: '#6b7a8d', marginBottom: 6 }}>
+      <label htmlFor={id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.8rem', fontWeight: 600, color: '#94a3b8', marginBottom: 6 }}>
         <span>{label}</span>
-        {hint && <span style={{ color: '#4a5568', fontWeight: 400, fontSize: '0.72rem' }}>{hint}</span>}
+        {hint && <span style={{ color: '#cbd5e1', fontWeight: 400, fontSize: '0.72rem' }}>{hint}</span>}
       </label>
       <input
         id={id}
@@ -56,10 +56,10 @@ function Field({ id, label, value, onChange, placeholder, disabled, hint, error 
 }
 
 const STEPS = [
-  { label: 'Upload CAD Model' },
-  { label: 'Creator & Project Info' },
-  { label: 'Watermark Embedding' },
-  { label: 'Protected Result' },
+  { label: 'Upload CAD Model', icon: Upload },
+  { label: 'Creator & Project Info', icon: Fingerprint },
+  { label: 'Watermark Embedding', icon: Cpu },
+  { label: 'Protected Result', icon: CheckCircle2 },
 ]
 
 export default function EmbedPage() {
@@ -170,7 +170,7 @@ export default function EmbedPage() {
             <h1 style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: '2rem', fontWeight: 800, color: '#f0f4ff', letterSpacing: '-0.02em', marginBottom: 6 }}>
               Protect <span style={{ background: 'linear-gradient(135deg, #00e5ff, #8b5cf6)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>3D CAD Model</span>
             </h1>
-            <p style={{ color: '#4a5568', fontSize: '0.85rem' }}>
+            <p style={{ color: '#94a3b8', fontSize: '0.88rem' }}>
               Embed cryptographically secure watermarks imperceptibly into mesh vertex geometry.
             </p>
           </div>
@@ -197,7 +197,7 @@ export default function EmbedPage() {
                   {info && (
                     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
                       style={{ padding: 20, borderRadius: 16, background: 'rgba(0,229,255,0.04)', border: '1px solid rgba(0,229,255,0.15)', marginTop: 20 }}>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16 }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: 16 }}>
                         {[
                           ['Vertices', info.vertex_count?.toLocaleString()],
                           ['Faces',    info.face_count?.toLocaleString()],
@@ -205,7 +205,7 @@ export default function EmbedPage() {
                         ].map(([l, v]) => (
                           <div key={l} style={{ textAlign: 'center' }}>
                             <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 800, fontSize: '1.2rem', color: '#00e5ff' }}>{v}</div>
-                            <div style={{ fontSize: '0.7rem', color: '#4a5568', textTransform: 'uppercase', letterSpacing: '0.06em', marginTop: 2 }}>{l}</div>
+                            <div style={{ fontSize: '0.72rem', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em', marginTop: 2 }}>{l}</div>
                           </div>
                         ))}
                       </div>
@@ -245,7 +245,7 @@ export default function EmbedPage() {
                           {user.full_name} · <span style={{ fontFamily: 'monospace', color: '#00e5ff' }}>{user.user_id || user.owner_id}</span>
                         </div>
                         {user.college_company && (
-                          <div style={{ fontSize: '0.75rem', color: '#6b7a8d' }}>
+                          <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
                             {user.college_company}
                           </div>
                         )}
@@ -258,7 +258,7 @@ export default function EmbedPage() {
 
                   {/* Watermark Signature Preview */}
                   <div style={{ padding: '12px 16px', borderRadius: 12, background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', marginBottom: 24 }}>
-                    <div style={{ fontSize: '0.7rem', color: '#6b7a8d', textTransform: 'uppercase', marginBottom: 4 }}>
+                    <div style={{ fontSize: '0.7rem', color: '#94a3b8', textTransform: 'uppercase', marginBottom: 4 }}>
                       Embedded Watermark Signature Format:
                     </div>
                     <div style={{ fontFamily: 'monospace', fontSize: '0.78rem', color: '#a78bfa' }}>
@@ -267,7 +267,7 @@ export default function EmbedPage() {
                   </div>
 
                   <Section title="Project Details" icon={FileText} color="#8b5cf6">
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16, marginBottom: 16 }}>
                       <Field
                         id="pname"
                         label="Project Name *"
@@ -278,7 +278,7 @@ export default function EmbedPage() {
                       />
 
                       <div>
-                        <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.8rem', fontWeight: 600, color: '#6b7a8d', marginBottom: 6 }}>
+                        <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.8rem', fontWeight: 600, color: '#94a3b8', marginBottom: 6 }}>
                           <span>Project ID *</span>
                           <button
                             type="button"
@@ -311,10 +311,10 @@ export default function EmbedPage() {
                     </div>
 
                     <div>
-                      <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.8rem', fontWeight: 600, color: '#6b7a8d', marginBottom: 8 }}>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.8rem', fontWeight: 600, color: '#94a3b8', marginBottom: 8 }}>
                         <Key size={12} style={{ color: '#f59e0b' }} />
                         Custom Secret Key
-                        <span style={{ color: '#4a5568', fontWeight: 400 }}>(optional — defaults to secure system key)</span>
+                        <span style={{ color: '#cbd5e1', fontWeight: 400 }}>(optional — defaults to secure system key)</span>
                       </label>
                       <input
                         type="password"
@@ -353,20 +353,20 @@ export default function EmbedPage() {
                       <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, color: '#22c55e', fontSize: '1rem' }}>
                         Watermark Embedded Successfully!
                       </div>
-                      <div style={{ color: '#6b7a8d', fontSize: '0.8rem' }}>
+                      <div style={{ color: '#94a3b8', fontSize: '0.82rem' }}>
                         CAD model is authenticated and permanently registered under Project ID: <strong style={{ color: '#00e5ff', fontFamily: 'monospace' }}>{result.project_id || form.model_id_str}</strong>
                       </div>
                     </div>
                   </div>
 
                   {/* Main stats layout */}
-                  <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: 32, alignItems: 'center', marginBottom: 28 }} className="grid grid-cols-1 md:grid-cols-3">
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 32, alignItems: 'center', marginBottom: 28 }}>
                     <div style={{ display: 'flex', justifyContent: 'center' }}>
                       <SecurityScore score={result.integrity_score || 99.8} size={190} />
                     </div>
 
-                    <div style={{ gridColumn: 'span 2' }}>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                    <div>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 14 }}>
                         {[
                           ['Project ID', result.project_id || form.model_id_str, true],
                           ['Creator Name', result.creator_name || user.full_name],
@@ -376,7 +376,7 @@ export default function EmbedPage() {
                           ['Processing Time', `${result.processing_time || 2.1}s`],
                         ].map(([l, v, isMono]) => (
                           <div key={l} style={{ padding: '12px 14px', borderRadius: 12, background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)' }}>
-                            <div style={{ fontSize: '0.68rem', color: '#4a5568', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{l}</div>
+                            <div style={{ fontSize: '0.68rem', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{l}</div>
                             <div style={{ fontFamily: isMono ? 'monospace' : "'Space Grotesk', sans-serif", fontWeight: 700, color: '#f0f4ff', fontSize: '0.92rem', marginTop: 2 }}>{v}</div>
                           </div>
                         ))}

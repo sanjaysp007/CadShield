@@ -15,12 +15,12 @@ export default function StepProgress({ currentStep = 1, steps = DEFAULT_STEPS })
         const num     = idx + 1
         const isDone  = currentStep > num
         const isCur   = currentStep === num
-        const Icon    = step.icon
+        const Icon    = step.icon || (isDone ? Check : CheckCircle)
 
-        const circleColor  = isDone ? '#22c55e' : isCur ? '#00e5ff' : 'rgba(255,255,255,0.1)'
-        const circleBorder = isDone ? '#22c55e' : isCur ? '#00e5ff' : 'rgba(255,255,255,0.15)'
-        const circleBg     = isDone ? 'rgba(34,197,94,0.15)' : isCur ? 'rgba(0,229,255,0.12)' : 'rgba(255,255,255,0.03)'
-        const labelColor   = isDone ? '#22c55e' : isCur ? '#00e5ff' : '#374151'
+        const circleColor  = isDone ? '#22c55e' : isCur ? '#00e5ff' : 'rgba(255,255,255,0.2)'
+        const circleBorder = isDone ? '#22c55e' : isCur ? '#00e5ff' : 'rgba(255,255,255,0.2)'
+        const circleBg     = isDone ? 'rgba(34,197,94,0.15)' : isCur ? 'rgba(0,229,255,0.12)' : 'rgba(255,255,255,0.04)'
+        const labelColor   = isDone ? '#22c55e' : isCur ? '#00e5ff' : '#94a3b8'
 
         return (
           <div key={num} style={{ display: 'flex', alignItems: 'center', flex: idx < steps.length - 1 ? 1 : undefined }}>

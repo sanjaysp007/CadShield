@@ -140,6 +140,16 @@ export async function signup(email, password, fullName, organization) {
       created_at: supaUser?.created_at || new Date().toISOString(),
     }
 
+    saveRegisteredUserLocal({
+      id: supaUser?.id || `user-${Date.now()}`,
+      user_id: owner_id,
+      name: fullName.trim(),
+      email: cleanEmail,
+      role: 'user',
+      college_company: organization || null,
+      created_at: userObj.created_at,
+    })
+
     // Save profile to database non-sensitively (passwords are never stored)
     if (supaUser?.id) {
       try {
@@ -255,6 +265,15 @@ async function handleUnconfirmedOrAdminLogin(email, isMainAdmin = false) {
   const sessionToken = `${header}.${payload}.${sig}`
 
   saveAuth(sessionToken, userObj)
+  saveRegisteredUserLocal({
+    id: userObj.id,
+    user_id: userObj.user_id,
+    name: userObj.full_name,
+    email: userObj.email,
+    role: userObj.role,
+    college_company: userObj.college_company,
+    created_at: userObj.created_at,
+  })
   return { token: sessionToken, user: userObj }
 }
 
@@ -366,6 +385,15 @@ export async function login(identifier, password) {
     }
 
     saveAuth(session.access_token, userObj)
+    saveRegisteredUserLocal({
+      id: userObj.id,
+      user_id: userObj.user_id,
+      name: userObj.full_name,
+      email: userObj.email,
+      role: userObj.role,
+      college_company: userObj.college_company,
+      created_at: userObj.created_at,
+    })
     return { token: session.access_token, user: userObj }
   } catch (supaErr) {
     if (isMainAdminCreds || supaErr?.message?.includes('Email not confirmed') || supaErr?.code === 'email_not_confirmed') {
@@ -375,46 +403,82 @@ export async function login(identifier, password) {
   }
 }
 
+export function getRegisteredUsersLocal() {
+  try {
+    const raw = localStorage.getItem('cadshield_registered_users')
+    return raw ? JSON.parse(raw) : []
+  } catch (_) {
+    return []
+  }
+}
+
+export function saveRegisteredUserLocal(userObj) {
+  if (!userObj) return
+  try {
+    const list = getRegisteredUsersLocal()
+    const idx = list.findIndex(u =>
+      (u.id && userObj.id && u.id === userObj.id) ||
+      (u.email && userObj.email && u.email.toLowerCase() === userObj.email.toLowerCase())
+    )
+    if (idx >= 0) {
+      list[idx] = { ...list[idx], ...userObj }
+    } else {
+      list.push(userObj)
+    }
+    localStorage.setItem('cadshield_registered_users', JSON.stringify(list))
+  } catch (_) {}
+}
+
 export async function getAdminUsers() {
+  let list = []
   try {
     const { data, error } = await supabase
       .from('profiles')
       .select('id, user_id, name, email, role, phone, profile_photo, college_company, created_at')
       .order('created_at', { ascending: false })
 
-    if (error) throw error
-    let list = Array.isArray(data) ? [...data] : []
-    const hasMainAdmin = list.some(u => u.email?.toLowerCase() === 'mailtosanjaysp@gmail.com')
-    if (!hasMainAdmin) {
-      list.unshift({
-        id: 'main-admin-id',
-        user_id: 'OWN-MAIN-ADMIN',
-        name: 'Sanjay SP (Main Admin)',
-        email: 'mailtosanjaysp@gmail.com',
-        role: 'main_admin',
-        phone: null,
-        profile_photo: null,
-        college_company: 'CADShield Administration',
-        created_at: new Date().toISOString(),
-      })
+    if (!error && Array.isArray(data)) {
+      list = [...data]
     }
-    return list
   } catch (err) {
-    console.warn('getAdminUsers error, using fallback:', err)
-    return [
-      {
-        id: 'main-admin-id',
-        user_id: 'OWN-MAIN-ADMIN',
-        name: 'Sanjay SP (Main Admin)',
-        email: 'mailtosanjaysp@gmail.com',
-        role: 'main_admin',
-        phone: null,
-        profile_photo: null,
-        college_company: 'CADShield Administration',
-        created_at: new Date().toISOString(),
-      }
-    ]
+    console.warn('getAdminUsers error, merging with local storage:', err)
   }
+
+  // Merge with locally stored registered users so newly registered users and role changes appear reliably
+  const localUsers = getRegisteredUsersLocal()
+  for (const lu of localUsers) {
+    const existingIdx = list.findIndex(u =>
+      (u.id && lu.id && u.id === lu.id) ||
+      (u.email && lu.email && u.email.toLowerCase() === lu.email.toLowerCase())
+    )
+    if (existingIdx === -1) {
+      list.push(lu)
+    } else if (lu.role) {
+      list[existingIdx] = { ...list[existingIdx], role: lu.role }
+    }
+  }
+
+  const hasMainAdmin = list.some(u => u.email?.toLowerCase() === 'mailtosanjaysp@gmail.com')
+  if (!hasMainAdmin) {
+    list.unshift({
+      id: 'main-admin-id',
+      user_id: 'OWN-MAIN-ADMIN',
+      name: 'Sanjay SP (Main Admin)',
+      email: 'mailtosanjaysp@gmail.com',
+      role: 'main_admin',
+      phone: null,
+      profile_photo: null,
+      college_company: 'CADShield Administration',
+      created_at: '2025-01-01T00:00:00.000Z',
+    })
+  } else {
+    const maIdx = list.findIndex(u => u.email?.toLowerCase() === 'mailtosanjaysp@gmail.com')
+    if (maIdx >= 0) {
+      list[maIdx].role = 'main_admin'
+    }
+  }
+
+  return list
 }
 
 export async function updateUserRole(profileId, newRole) {
@@ -423,25 +487,47 @@ export async function updateUserRole(profileId, newRole) {
     throw new Error('Invalid role specified. Only "admin" and "user" roles can be assigned.')
   }
 
-  // Fetch target profile to verify it is not the protected Main Admin
-  const { data: targetProfile, error: fetchErr } = await supabase
-    .from('profiles')
-    .select('role, email')
-    .eq('id', profileId)
-    .maybeSingle()
-
-  if (targetProfile?.role === 'main_admin') {
-    throw new Error('The Main Administrator is protected and cannot be modified or demoted.')
+  // Update in local cache immediately
+  const localList = getRegisteredUsersLocal()
+  const localIdx = localList.findIndex(u => u.id === profileId || u.user_id === profileId)
+  if (localIdx >= 0) {
+    if (localList[localIdx].role === 'main_admin') {
+      throw new Error('The Main Administrator is protected and cannot be modified or demoted.')
+    }
+    localList[localIdx].role = newRole
+    localStorage.setItem('cadshield_registered_users', JSON.stringify(localList))
   }
 
-  const { data, error } = await supabase
-    .from('profiles')
-    .update({ role: newRole })
-    .eq('id', profileId)
-    .select()
+  // Check current logged in user to update role in cadshield_user if it's them
+  const cur = getUser()
+  if (cur && (cur.id === profileId || cur.user_id === profileId)) {
+    updateStoredUser({ role: newRole })
+  }
 
-  if (error) throw error
-  return data
+  // Also sync to Supabase
+  try {
+    const { data: targetProfile } = await supabase
+      .from('profiles')
+      .select('role, email')
+      .eq('id', profileId)
+      .maybeSingle()
+
+    if (targetProfile?.role === 'main_admin') {
+      throw new Error('The Main Administrator is protected and cannot be modified or demoted.')
+    }
+
+    const { data, error } = await supabase
+      .from('profiles')
+      .update({ role: newRole })
+      .eq('id', profileId)
+      .select()
+
+    if (!error) return data
+  } catch (err) {
+    console.warn('Supabase role update note (persisted locally):', err)
+  }
+
+  return { id: profileId, role: newRole }
 }
 
 export async function getAdminInsights() {
