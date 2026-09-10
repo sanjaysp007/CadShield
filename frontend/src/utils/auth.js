@@ -139,6 +139,10 @@ export async function initSupabaseSession() {
 
       let role = meta.role || existing.role || 'user'
 
+      if (supaUser.email?.toLowerCase() === 'mailtosanjaysp@gmail.com') {
+        role = 'main_admin'
+      }
+
       // Attempt to load role and details from Supabase profiles table
       try {
         const { data: profile } = await supabase
@@ -148,7 +152,7 @@ export async function initSupabaseSession() {
           .maybeSingle()
 
         if (profile) {
-          role = profile.role || role
+          role = supaUser.email?.toLowerCase() === 'mailtosanjaysp@gmail.com' ? 'main_admin' : (profile.role || role)
         } else {
           // If profile does not exist yet, auto-create it non-sensitively
           await supabase.from('profiles').upsert({
@@ -164,6 +168,15 @@ export async function initSupabaseSession() {
         }
       } catch (profileErr) {
         console.warn('Profiles table sync notice:', profileErr?.message)
+      }
+
+      // Check role overrides map
+      if (supaUser.email?.toLowerCase() !== 'mailtosanjaysp@gmail.com') {
+        try {
+          const overrides = JSON.parse(localStorage.getItem('cadshield_role_overrides') || '{}')
+          const ovRole = overrides[supaUser.email?.toLowerCase()] || overrides[user_id] || overrides[supaUser.id]
+          if (ovRole) role = ovRole
+        } catch (_) {}
       }
 
       const userObj = {
@@ -206,25 +219,87 @@ export async function initSupabaseSession() {
             .select('role')
             .eq('id', supaUser.id)
             .maybeSingle()
-          if (profile?.role) role = profile.role
-        } catch (_) {}
+        if (profile?.role) role = profile.role
+      } catch (_) {}
 
-        const userObj = {
-          ...existing,
-          id: supaUser.id,
-          user_id: user_id,
-          owner_id: user_id,
-          email: supaUser.email,
-          role: role,
-          full_name: meta.full_name || existing.full_name || supaUser.email?.split('@')[0],
-          created_at: supaUser.created_at,
-        }
-        saveAuth(session.access_token, userObj)
-      } else if (event === 'SIGNED_OUT') {
-        clearAuth()
+      // Ensure Main Admin protection
+      if (supaUser.email?.toLowerCase() === 'mailtosanjaysp@gmail.com') {
+        role = 'main_admin'
+        try {
+          supabase.from('profiles').update({ role: 'main_admin' }).eq('id', supaUser.id).then(() => {})
+        } catch (_) {}
+      } else {
+        // Check role overrides map
+        try {
+          const overrides = JSON.parse(localStorage.getItem('cadshield_role_overrides') || '{}')
+          const ovRole = overrides[supaUser.email?.toLowerCase()] || overrides[user_id] || overrides[supaUser.id]
+          if (ovRole && ovRole !== role) {
+            role = ovRole
+          }
+        } catch (_) {}
       }
-    })
-  } catch (err) {
-    console.warn('Supabase session init error:', err)
+
+      const userObj = {
+        ...existing,
+        id: supaUser.id,
+        user_id: user_id,
+        owner_id: user_id,
+        email: supaUser.email,
+        role: role,
+        full_name: meta.full_name || existing.full_name || supaUser.email?.split('@')[0],
+        created_at: supaUser.created_at,
+      }
+      saveAuth(session.access_token, userObj)
+    } else if (event === 'SIGNED_OUT') {
+      clearAuth()
+    }
+  })
+} catch (err) {
+  console.warn('Supabase session init error:', err)
+}
+}
+
+/**
+ * Actively synchronize current user's role from Supabase profiles, role overrides, or local storage.
+ * Dispatches 'cadshield-user-updated' if role changed.
+ */
+export async function syncCurrentUserRole() {
+  const cur = getUser()
+  if (!cur) return null
+
+  // 1. Permanent Main Admin check
+  if (cur.email?.toLowerCase() === 'mailtosanjaysp@gmail.com') {
+    if (cur.role !== 'main_admin') {
+      return updateStoredUser({ role: 'main_admin' })
+    }
+    return cur
   }
+
+  // 2. Check local role overrides (for immediate cross-tab or test reflection)
+  try {
+    const overrides = JSON.parse(localStorage.getItem('cadshield_role_overrides') || '{}')
+    const ovRole = overrides[cur.email?.toLowerCase()] || overrides[cur.user_id] || overrides[cur.id]
+    if (ovRole && ovRole !== cur.role) {
+      return updateStoredUser({ role: ovRole })
+    }
+  } catch (_) {}
+
+  // 3. Query Supabase profiles table
+  try {
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cur.id)
+    let query = supabase.from('profiles').select('id, user_id, email, role')
+    if (isUuid) {
+      query = query.eq('id', cur.id)
+    } else if (cur.email) {
+      query = query.eq('email', cur.email)
+    } else if (cur.user_id) {
+      query = query.eq('user_id', cur.user_id)
+    }
+    const { data: prof, error } = await query.maybeSingle()
+    if (!error && prof?.role && prof.role !== cur.role) {
+      return updateStoredUser({ role: prof.role })
+    }
+  } catch (_) {}
+
+  return cur
 }

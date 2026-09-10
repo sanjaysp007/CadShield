@@ -6,7 +6,7 @@ import {
   FolderLock, History, Menu, X, Eye, LogOut,
   ChevronDown, Copy, Check, User, Settings, ShieldCheck, ShieldAlert
 } from 'lucide-react'
-import { getUser, logout } from '../utils/auth'
+import { getUser, logout, syncCurrentUserRole } from '../utils/auth'
 import { getAssetUrl } from '../utils/api'
 
 function UserMenu({ user }) {
@@ -36,6 +36,7 @@ function UserMenu({ user }) {
   }, [open])
 
   const photoSrc = getAssetUrl(user?.profile_photo)
+  const isAdminUser = user?.role === 'admin' || user?.role === 'main_admin'
 
   const initials = (user?.full_name || 'CAD User')
     .split(' ')
@@ -100,7 +101,19 @@ function UserMenu({ user }) {
           >
             {/* User info Header */}
             <div style={{ padding: '4px 6px 12px', borderBottom: '1px solid rgba(255,255,255,0.06)', marginBottom: 8 }}>
-              <p style={{ fontSize: '0.85rem', fontWeight: 700, color: '#f0f4ff', marginBottom: 2 }}>{user.full_name}</p>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6, marginBottom: 2 }}>
+                <p style={{ fontSize: '0.85rem', fontWeight: 700, color: '#f0f4ff' }}>{user.full_name}</p>
+                {isAdminUser && (
+                  <span style={{
+                    fontSize: '0.62rem', fontWeight: 800, padding: '2px 7px', borderRadius: 99,
+                    background: user.role === 'main_admin' ? 'rgba(239,68,68,0.2)' : 'rgba(0,229,255,0.2)',
+                    color: user.role === 'main_admin' ? '#f87171' : '#00e5ff',
+                    border: `1px solid ${user.role === 'main_admin' ? 'rgba(239,68,68,0.4)' : 'rgba(0,229,255,0.4)'}`,
+                  }}>
+                    {user.role === 'main_admin' ? 'MAIN ADMIN' : 'ADMIN'}
+                  </span>
+                )}
+              </div>
               <p style={{ fontSize: '0.72rem', color: '#94a3b8', marginBottom: 8 }}>{user.email}</p>
 
               {/* User ID display with copy */}
@@ -116,6 +129,32 @@ function UserMenu({ user }) {
                 </div>
               </div>
             </div>
+
+            {/* Admin Panel Quick Access (if Admin) */}
+            {isAdminUser && (
+              <Link to="/admin" onClick={() => setOpen(false)} style={{ textDecoration: 'none' }}>
+                <div style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  padding: '9px 10px', borderRadius: 10,
+                  background: 'linear-gradient(135deg, rgba(239,68,68,0.14), rgba(244,63,94,0.08))',
+                  border: '1px solid rgba(239,68,68,0.3)', marginBottom: 8, cursor: 'pointer',
+                  transition: 'all 0.2s',
+                }}
+                onMouseEnter={e => e.currentTarget.style.background = 'rgba(239,68,68,0.22)'}
+                onMouseLeave={e => e.currentTarget.style.background = 'linear-gradient(135deg, rgba(239,68,68,0.14), rgba(244,63,94,0.08))'}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <ShieldAlert size={15} style={{ color: '#ef4444' }} />
+                    <span style={{ fontSize: '0.82rem', fontWeight: 700, color: '#fca5a5' }}>Admin Panel</span>
+                  </div>
+                  <span style={{
+                    fontSize: '0.62rem', fontWeight: 800, padding: '2px 6px', borderRadius: 99,
+                    background: 'rgba(239,68,68,0.25)', color: '#fca5a5', letterSpacing: '0.05em'
+                  }}>
+                    ENTER &rarr;
+                  </span>
+                </div>
+              </Link>
+            )}
 
             {/* Menu Links */}
             <Link to="/profile" onClick={() => setOpen(false)} style={{ textDecoration: 'none' }}>
@@ -179,16 +218,35 @@ export default function Navbar() {
 
   useEffect(() => setMobileOpen(false), [pathname])
 
-  // React to profile updates
+  // React to profile updates and active role synchronization
   useEffect(() => {
     const syncUser = () => setUser(getUser())
     window.addEventListener('cadshield-user-updated', syncUser)
-    return () => window.removeEventListener('cadshield-user-updated', syncUser)
+
+    // Actively check and synchronize current user's role from Supabase or overrides
+    const syncRole = async () => {
+      const u = await syncCurrentUserRole()
+      if (u) setUser(u)
+    }
+    syncRole()
+    const timer = setInterval(syncRole, 10000)
+    window.addEventListener('focus', syncRole)
+    window.addEventListener('storage', syncRole)
+    window.addEventListener('cadshield-user-role-changed', syncRole)
+
+    return () => {
+      window.removeEventListener('cadshield-user-updated', syncUser)
+      clearInterval(timer)
+      window.removeEventListener('focus', syncRole)
+      window.removeEventListener('storage', syncRole)
+      window.removeEventListener('cadshield-user-role-changed', syncRole)
+    }
   }, [])
 
   const isAdminUser = user?.role === 'admin' || user?.role === 'main_admin'
   const navItems = [
-    { to: isAdminUser ? '/admin' : '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { to: '/dashboard',      label: 'Dashboard',   icon: LayoutDashboard },
+    ...(isAdminUser ? [{ to: '/admin', label: 'Admin Panel', icon: ShieldAlert, isSpecial: true }] : []),
     { to: '/embed',          label: 'Protect',     icon: Lock },
     { to: '/my-projects',    label: 'My Projects', icon: FolderLock },
     { to: '/verify-project', label: 'Verify',      icon: ShieldCheck },
@@ -223,12 +281,24 @@ export default function Navbar() {
 
             {/* Desktop Navigation */}
             <div className="hidden md:flex items-center" style={{ gap: 2, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 14, padding: '4px 6px' }}>
-              {navItems.map(({ to, label, icon: Icon }) => {
-                const active = pathname === to || (label === 'Dashboard' && (pathname === '/dashboard' || pathname === '/admin'))
+              {navItems.map(({ to, label, icon: Icon, isSpecial }) => {
+                const active = pathname === to
                 return (
                   <Link key={to} to={to} style={{ textDecoration: 'none' }}>
-                    <motion.div whileHover={{ scale: 1.03 }} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 10, fontSize: '0.82rem', fontWeight: 500, transition: 'all 0.2s', background: active ? 'rgba(0,229,255,0.1)' : 'transparent', color: active ? '#00e5ff' : '#8892a4', boxShadow: active ? '0 0 12px rgba(0,229,255,0.15)' : 'none' }}>
-                      <Icon size={13} />{label}
+                    <motion.div whileHover={{ scale: 1.03 }} style={{
+                      display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 10, fontSize: '0.82rem',
+                      fontWeight: isSpecial ? 700 : 500, transition: 'all 0.2s',
+                      background: active
+                        ? (isSpecial ? 'rgba(239,68,68,0.15)' : 'rgba(0,229,255,0.1)')
+                        : (isSpecial ? 'rgba(239,68,68,0.08)' : 'transparent'),
+                      color: active
+                        ? (isSpecial ? '#f87171' : '#00e5ff')
+                        : (isSpecial ? '#fca5a5' : '#8892a4'),
+                      border: isSpecial ? '1px solid rgba(239,68,68,0.25)' : '1px solid transparent',
+                      boxShadow: active ? (isSpecial ? '0 0 12px rgba(239,68,68,0.2)' : '0 0 12px rgba(0,229,255,0.15)') : 'none'
+                    }}>
+                      <Icon size={13} style={{ color: isSpecial ? '#ef4444' : undefined }} />
+                      {label}
                     </motion.div>
                   </Link>
                 )
@@ -250,12 +320,23 @@ export default function Navbar() {
       <AnimatePresence>
         {mobileOpen && (
           <motion.div initial={{ opacity: 0, y: -16 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -16 }} style={{ position: 'fixed', top: 64, left: 0, right: 0, zIndex: 99, background: 'rgba(7,10,23,0.97)', backdropFilter: 'blur(20px)', borderBottom: '1px solid rgba(255,255,255,0.06)', padding: '16px 20px 20px' }}>
-            {navItems.map(({ to, label, icon: Icon }) => {
-              const active = pathname === to || (label === 'Dashboard' && (pathname === '/dashboard' || pathname === '/admin'))
+            {navItems.map(({ to, label, icon: Icon, isSpecial }) => {
+              const active = pathname === to
               return (
                 <Link key={to} to={to} style={{ textDecoration: 'none', display: 'block' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', borderRadius: 12, marginBottom: 4, background: active ? 'rgba(0,229,255,0.08)' : 'transparent', color: active ? '#00e5ff' : '#8892a4', fontSize: '0.9rem', fontWeight: 500 }}>
-                    <Icon size={15} />{label}
+                  <div style={{
+                    display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', borderRadius: 12, marginBottom: 4,
+                    background: active
+                      ? (isSpecial ? 'rgba(239,68,68,0.15)' : 'rgba(0,229,255,0.08)')
+                      : (isSpecial ? 'rgba(239,68,68,0.08)' : 'transparent'),
+                    color: active
+                      ? (isSpecial ? '#f87171' : '#00e5ff')
+                      : (isSpecial ? '#fca5a5' : '#8892a4'),
+                    border: isSpecial ? '1px solid rgba(239,68,68,0.25)' : 'none',
+                    fontSize: '0.9rem', fontWeight: isSpecial ? 700 : 500
+                  }}>
+                    <Icon size={15} style={{ color: isSpecial ? '#ef4444' : undefined }} />
+                    {label}
                   </div>
                 </Link>
               )

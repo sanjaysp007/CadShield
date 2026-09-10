@@ -76,15 +76,15 @@ export default function AdminDashboard() {
       toast.error('The Main Administrator is protected and cannot be modified or demoted.')
       return
     }
-    if (targetUser.id === currentUser.id) {
+    if (targetUser.id === currentUser.id || (targetUser.email && targetUser.email.toLowerCase() === currentUser.email?.toLowerCase())) {
       toast.error('You cannot change your own admin role.')
       return
     }
     const newRole = targetUser.role === 'admin' ? 'user' : 'admin'
-    setUpdatingId(targetUser.id)
+    setUpdatingId(targetUser.id || targetUser.email)
     try {
-      setUsers(prev => prev.map(u => (u.id === targetUser.id || u.user_id === targetUser.user_id) ? { ...u, role: newRole } : u))
-      await updateUserRole(targetUser.id, newRole)
+      setUsers(prev => prev.map(u => (u.id === targetUser.id || u.user_id === targetUser.user_id || (u.email && u.email.toLowerCase() === targetUser.email?.toLowerCase())) ? { ...u, role: newRole } : u))
+      await updateUserRole(targetUser.id, newRole, targetUser.email, targetUser.user_id)
       toast.success(`User ${targetUser.name || targetUser.email} role updated to ${newRole.toUpperCase()}!`)
       loadAllData()
     } catch (err) {

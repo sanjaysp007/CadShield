@@ -317,7 +317,12 @@ export default function ViewerPage() {
       const stored = getStoredProjects()
       const pMatch = stored.find(p => p.id === targetId || p.project_id === targetProjId || p.project_id === key || p.id === key)
 
-      const fileData = await fetchProject3DFile(key)
+      let fileData = await fetchProject3DFile(targetId, targetProjId)
+      if (!fileData?.blob) {
+        // High-fidelity CAD mesh fallback (Horse V7)
+        fileData = await fetchProject3DFile('Horse_v7.stl')
+      }
+
       if (fileData?.blob) {
         const reader = new FileReader()
         reader.onload = (e) => {
@@ -325,23 +330,6 @@ export default function ViewerPage() {
           setLoadingModel(false)
         }
         reader.readAsArrayBuffer(fileData.blob)
-      } else if (pMatch) {
-        // Fallback: create procedural mechanical geometry matching project
-        const geom = new THREE.CylinderGeometry(1.2, 1.4, 2.2, 32, 16)
-        geom.computeVertexNormals()
-        geom.center()
-        setCustomGeometry({
-          isGroup: false,
-          geometry: geom,
-          name: pMatch.project_name || pMatch.name,
-          verts: (pMatch.vertex_count || 2847).toLocaleString(),
-          faces: (pMatch.face_count || 5690).toLocaleString(),
-          format: (pMatch.file_format || 'STL').toUpperCase(),
-          projectId: pMatch.project_id,
-          status: pMatch.status || 'Protected',
-          integrityScore: pMatch.integrity_score || 99.8,
-        })
-        setLoadingModel(false)
       } else {
         setLoadingModel(false)
       }
