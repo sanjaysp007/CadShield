@@ -110,7 +110,7 @@ export default function EmbedPage() {
         model_id_str: p.model_id_str || r.project_id || `PRJ-${Date.now().toString(36).toUpperCase().slice(-4)}-${Math.random().toString(36).slice(2,6).toUpperCase()}`,
       }))
       setStep(2)
-      toast.success('Model analyzed successfully!')
+      toast.success('Model analyzed and saved to My Projects!')
     } catch (e) {
       toast.error(e?.response?.data?.detail || 'Upload failed')
     } finally {
@@ -142,7 +142,7 @@ export default function EmbedPage() {
       })
       setResult(r)
       setStep(4)
-      toast.success('Watermark embedded successfully!')
+      toast.success('Watermark embedded and project updated in My Projects!')
     } catch (e) {
       toast.error(e?.response?.data?.detail || 'Embedding failed')
       setStep(2)

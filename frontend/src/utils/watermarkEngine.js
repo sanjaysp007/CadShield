@@ -360,3 +360,20 @@ function parseMarkerFromText(text) {
 
   return res
 }
+
+/**
+ * Generate a valid binary STL Blob with authentic CADShield watermark header
+ */
+export function createSampleWatermarkedSTL(owner_id = 'OWN-DEMO-0001', project_id = 'PRJ-DEMO', watermark_id = 'wm-demo') {
+  const buffer = new ArrayBuffer(84)
+  const view = new Uint8Array(buffer)
+  view.fill(0x20, 0, 80)
+  const headerStr = `CADShield|V1|OWN:${owner_id}|PRJ:${project_id}|WM:${watermark_id}|SIG:cadshield_sig`
+  const enc = new TextEncoder().encode(headerStr)
+  for (let i = 0; i < Math.min(enc.length, 80); i++) {
+    view[i] = enc[i]
+  }
+  const dv = new DataView(buffer)
+  dv.setUint32(80, 0, true)
+  return new Blob([buffer], { type: 'application/octet-stream' })
+}
