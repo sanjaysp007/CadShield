@@ -15,6 +15,7 @@ import ProfilePage        from './pages/ProfilePage'
 import MyProjectsPage     from './pages/MyProjectsPage'
 import ProjectVerifyPage  from './pages/ProjectVerifyPage'
 import CreatorPage        from './pages/CreatorPage'
+import AdminDashboard     from './pages/AdminDashboard'
 import { isLoggedIn, initSupabaseSession } from './utils/auth'
 
 // ── Protected route wrapper ───────────────────────────
@@ -47,6 +48,7 @@ function AppRoutes() {
 
           {/* Protected */}
           <Route path="/dashboard"    element={<Protected><Dashboard /></Protected>} />
+          <Route path="/admin"        element={<Protected><AdminDashboard /></Protected>} />
           <Route path="/profile"      element={<Protected><ProfilePage /></Protected>} />
           <Route path="/my-projects"  element={<Protected><MyProjectsPage /></Protected>} />
           <Route path="/embed"        element={<Protected><EmbedPage /></Protected>} />

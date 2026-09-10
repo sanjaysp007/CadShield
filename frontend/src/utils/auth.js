@@ -12,6 +12,7 @@ export function saveAuth(token, user) {
       ...user,
       user_id: user.user_id || user.owner_id || 'OWN-UNKNOWN',
       owner_id: user.user_id || user.owner_id || 'OWN-UNKNOWN',
+      role: user.role || 'user',
     }
     localStorage.setItem(USER_KEY, JSON.stringify(normalized))
   }
@@ -26,6 +27,7 @@ export function updateStoredUser(updates) {
     user_id: current.user_id || updates.user_id,
     owner_id: current.user_id || updates.user_id,
     email: current.email || updates.email,
+    role: updates.role || current.role || 'user',
   }
   localStorage.setItem(USER_KEY, JSON.stringify(merged))
   window.dispatchEvent(new Event('cadshield-user-updated'))
@@ -49,6 +51,7 @@ export function getUser() {
     const u = JSON.parse(raw)
     u.user_id = u.user_id || u.owner_id
     u.owner_id = u.user_id
+    u.role = u.role || 'user'
     return u
   } catch {
     return null
@@ -65,6 +68,11 @@ export function isLoggedIn() {
   } catch {
     return true
   }
+}
+
+export function isAdmin() {
+  const user = getUser()
+  return user?.role === 'admin'
 }
 
 /**
@@ -87,7 +95,7 @@ export function authHeaders() {
 
 /**
  * Initialize and sync Supabase session on application load.
- * Ensures page refresh keeps the user authenticated.
+ * Ensures page refresh keeps the user authenticated and fetches role from profiles table.
  */
 export async function initSupabaseSession() {
   try {
@@ -97,13 +105,44 @@ export async function initSupabaseSession() {
       const meta = supaUser.user_metadata || {}
       const user_id = meta.user_id || meta.owner_id || `OWN-${supaUser.id.replace(/-/g, '').substring(0, 8).toUpperCase()}`
       const existing = getUser() || {}
+
+      let role = meta.role || existing.role || 'user'
+
+      // Attempt to load role and details from Supabase profiles table
+      try {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', supaUser.id)
+          .maybeSingle()
+
+        if (profile) {
+          role = profile.role || role
+        } else {
+          // If profile does not exist yet, auto-create it non-sensitively
+          await supabase.from('profiles').upsert({
+            id: supaUser.id,
+            user_id: user_id,
+            name: meta.full_name || supaUser.email?.split('@')[0],
+            email: supaUser.email,
+            role: role,
+            phone: meta.phone || null,
+            profile_photo: meta.profile_photo || null,
+            created_at: supaUser.created_at,
+          })
+        }
+      } catch (profileErr) {
+        console.warn('Profiles table sync notice:', profileErr?.message)
+      }
+
       const userObj = {
         ...existing,
         id: supaUser.id,
         user_id: user_id,
         owner_id: user_id,
         email: supaUser.email,
-        full_name: meta.full_name || existing.full_name || supaUser.email.split('@')[0],
+        role: role,
+        full_name: meta.full_name || existing.full_name || supaUser.email?.split('@')[0],
         phone: meta.phone || existing.phone || null,
         college_company: meta.college_company || meta.organization || existing.college_company || null,
         department: meta.department || existing.department || null,
@@ -116,20 +155,32 @@ export async function initSupabaseSession() {
       saveAuth(session.access_token, userObj)
     }
 
-    // Subscribe to auth state events
-    supabase.auth.onAuthStateChange((event, session) => {
+    // Subscribe to auth state changes
+    supabase.auth.onAuthStateChange(async (event, session) => {
       if (session?.user) {
         const supaUser = session.user
         const meta = supaUser.user_metadata || {}
         const user_id = meta.user_id || meta.owner_id || `OWN-${supaUser.id.replace(/-/g, '').substring(0, 8).toUpperCase()}`
         const existing = getUser() || {}
+
+        let role = meta.role || existing.role || 'user'
+        try {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('role')
+            .eq('id', supaUser.id)
+            .maybeSingle()
+          if (profile?.role) role = profile.role
+        } catch (_) {}
+
         const userObj = {
           ...existing,
           id: supaUser.id,
           user_id: user_id,
           owner_id: user_id,
           email: supaUser.email,
-          full_name: meta.full_name || existing.full_name || supaUser.email.split('@')[0],
+          role: role,
+          full_name: meta.full_name || existing.full_name || supaUser.email?.split('@')[0],
           created_at: supaUser.created_at,
         }
         saveAuth(session.access_token, userObj)

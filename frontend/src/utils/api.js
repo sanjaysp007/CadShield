@@ -101,6 +101,25 @@ export async function signup(email, password, fullName, organization) {
     }
 
     const token = session?.access_token || `token-${Date.now()}`
+
+    // Non-sensitive user profile creation in Supabase profiles table
+    if (supaUser) {
+      try {
+        await supabase.from('profiles').upsert({
+          id: supaUser.id,
+          user_id: owner_id,
+          name: fullName.trim(),
+          email: email.trim().toLowerCase(),
+          role: 'user',
+          phone: null,
+          profile_photo: null,
+          created_at: new Date().toISOString(),
+        })
+      } catch (profileErr) {
+        console.warn('Profiles table initial insert note:', profileErr?.message)
+      }
+    }
+
     saveAuth(token, userObj)
 
     return { token, user: userObj, needsEmailConfirmation: !session }
@@ -123,20 +142,50 @@ export async function login(email, password) {
     const meta = supaUser?.user_metadata || {}
 
     const user_id = meta.user_id || meta.owner_id || `OWN-${supaUser.id.replace(/-/g, '').substring(0, 8).toUpperCase()}`
+
+    let role = meta.role || 'user'
+    let profileData = null
+    try {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', supaUser.id)
+        .maybeSingle()
+
+      if (profile) {
+        role = profile.role || role
+        profileData = profile
+      } else {
+        await supabase.from('profiles').upsert({
+          id: supaUser.id,
+          user_id: user_id,
+          name: meta.full_name || supaUser.email.split('@')[0],
+          email: supaUser.email,
+          role: role,
+          phone: meta.phone || null,
+          profile_photo: meta.profile_photo || null,
+          created_at: supaUser.created_at,
+        })
+      }
+    } catch (profileErr) {
+      console.warn('Profiles table sync note on login:', profileErr?.message)
+    }
+
     const userObj = {
       id: supaUser.id,
-      user_id: user_id,
-      owner_id: user_id,
+      user_id: profileData?.user_id || user_id,
+      owner_id: profileData?.user_id || user_id,
       email: supaUser.email,
-      full_name: meta.full_name || supaUser.email.split('@')[0],
-      college_company: meta.college_company || meta.organization || null,
-      phone: meta.phone || null,
-      department: meta.department || null,
-      designation: meta.designation || null,
-      location: meta.location || null,
-      bio: meta.bio || null,
-      profile_photo: meta.profile_photo || null,
-      created_at: supaUser.created_at,
+      role: role,
+      full_name: profileData?.name || meta.full_name || supaUser.email.split('@')[0],
+      college_company: profileData?.college_company || meta.college_company || meta.organization || null,
+      phone: profileData?.phone || meta.phone || null,
+      department: profileData?.department || meta.department || null,
+      designation: profileData?.designation || meta.designation || null,
+      location: profileData?.location || meta.location || null,
+      bio: profileData?.bio || meta.bio || null,
+      profile_photo: profileData?.profile_photo || meta.profile_photo || null,
+      created_at: profileData?.created_at || supaUser.created_at,
     }
 
     saveAuth(session.access_token, userObj)
@@ -144,6 +193,16 @@ export async function login(email, password) {
   } catch (supaErr) {
     throw new Error(formatAuthError(supaErr))
   }
+}
+
+export async function getAdminUsers() {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('id, user_id, name, email, role, phone, profile_photo, created_at')
+    .order('created_at', { ascending: false })
+
+  if (error) throw error
+  return data || []
 }
 
 export async function fetchMe() {
