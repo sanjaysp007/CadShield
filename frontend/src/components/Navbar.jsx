@@ -4,10 +4,319 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   Shield, LayoutDashboard, Lock, CheckCircle,
   FolderLock, History, Menu, X, Eye, LogOut,
-  ChevronDown, Copy, Check, User, Settings, ShieldCheck, ShieldAlert
+  ChevronDown, Copy, Check, User, Settings, ShieldCheck, ShieldAlert,
+  Bell, BellRing, MessageSquare, ExternalLink, Box, CheckCheck
 } from 'lucide-react'
+import { format } from 'date-fns'
 import { getUser, logout, syncCurrentUserRole } from '../utils/auth'
-import { getAssetUrl } from '../utils/api'
+import {
+  getAssetUrl,
+  getUserNotifications,
+  markNotificationAsRead,
+  markAllNotificationsAsRead
+} from '../utils/api'
+
+function NotificationBell({ user }) {
+  const [open, setOpen] = useState(false)
+  const [notifications, setNotifications] = useState([])
+  const [unreadCount, setUnreadCount] = useState(0)
+  const bellRef = useRef(null)
+
+  const loadNotifications = async () => {
+    if (!user) return
+    try {
+      const notifs = await getUserNotifications(user)
+      setNotifications(notifs || [])
+      setUnreadCount((notifs || []).filter(n => !n.is_read).length)
+    } catch (_) {}
+  }
+
+  useEffect(() => {
+    loadNotifications()
+    const onUpdate = () => loadNotifications()
+    window.addEventListener('cadshield-notifications-updated', onUpdate)
+    window.addEventListener('storage', onUpdate)
+    const timer = setInterval(loadNotifications, 7000)
+
+    return () => {
+      window.removeEventListener('cadshield-notifications-updated', onUpdate)
+      window.removeEventListener('storage', onUpdate)
+      clearInterval(timer)
+    }
+  }, [user?.user_id, user?.owner_id, user?.email, user?.id])
+
+  useEffect(() => {
+    if (!open) return
+    const handleClickOutside = (e) => {
+      if (bellRef.current && !bellRef.current.contains(e.target)) {
+        setOpen(false)
+      }
+    }
+    document.addEventListener('pointerdown', handleClickOutside)
+    return () => document.removeEventListener('pointerdown', handleClickOutside)
+  }, [open])
+
+  const handleMarkOne = async (id, e) => {
+    if (e) e.stopPropagation()
+    await markNotificationAsRead(id)
+    loadNotifications()
+  }
+
+  const handleMarkAll = async (e) => {
+    if (e) e.stopPropagation()
+    await markAllNotificationsAsRead(user)
+    loadNotifications()
+  }
+
+  return (
+    <div ref={bellRef} style={{ position: 'relative' }}>
+      <button
+        onClick={() => setOpen(v => !v)}
+        title="Notifications from CadShield Team"
+        style={{
+          position: 'relative',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          width: 38, height: 38, borderRadius: 12,
+          background: unreadCount > 0 ? 'rgba(0,229,255,0.08)' : 'rgba(255,255,255,0.04)',
+          border: unreadCount > 0 ? '1px solid rgba(0,229,255,0.3)' : '1px solid rgba(255,255,255,0.08)',
+          color: unreadCount > 0 ? '#00e5ff' : '#94a3b8',
+          cursor: 'pointer', transition: 'all 0.2s',
+          boxShadow: unreadCount > 0 ? '0 0 15px rgba(0,229,255,0.2)' : 'none',
+        }}
+        onMouseEnter={e => {
+          e.currentTarget.style.borderColor = 'rgba(0,229,255,0.4)'
+          e.currentTarget.style.color = '#00e5ff'
+        }}
+        onMouseLeave={e => {
+          e.currentTarget.style.borderColor = unreadCount > 0 ? 'rgba(0,229,255,0.3)' : 'rgba(255,255,255,0.08)'
+          e.currentTarget.style.color = unreadCount > 0 ? '#00e5ff' : '#94a3b8'
+        }}
+      >
+        {unreadCount > 0 ? (
+          <BellRing size={17} style={{ color: '#00e5ff' }} />
+        ) : (
+          <Bell size={17} />
+        )}
+
+        {unreadCount > 0 && (
+          <span style={{
+            position: 'absolute', top: -3, right: -3,
+            minWidth: 17, height: 17, borderRadius: 99,
+            background: 'linear-gradient(135deg, #ef4444, #f43f5e)',
+            color: '#fff', fontSize: '0.62rem', fontWeight: 800,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            padding: '0 4px', boxShadow: '0 0 10px rgba(239,68,68,0.7)',
+            border: '2px solid #04060f',
+          }}>
+            {unreadCount > 9 ? '9+' : unreadCount}
+          </span>
+        )}
+      </button>
+
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{ opacity: 0, y: 10, scale: 0.96 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 10, scale: 0.96 }}
+            onClick={e => e.stopPropagation()}
+            style={{
+              position: 'absolute', right: 0, top: 'calc(100% + 10px)',
+              width: 380, maxWidth: 'calc(100vw - 24px)', zIndex: 250,
+              background: 'rgba(9,13,26,0.98)',
+              border: '1px solid rgba(0,229,255,0.2)',
+              borderRadius: 16, backdropFilter: 'blur(24px)',
+              boxShadow: '0 20px 60px rgba(0,0,0,0.6), 0 0 30px rgba(0,229,255,0.08)',
+              overflow: 'hidden',
+            }}
+          >
+            {/* Header */}
+            <div style={{
+              padding: '14px 16px',
+              borderBottom: '1px solid rgba(255,255,255,0.06)',
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              background: 'linear-gradient(180deg, rgba(0,229,255,0.06), transparent)',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{
+                  width: 26, height: 26, borderRadius: 8,
+                  background: 'rgba(0,229,255,0.15)', border: '1px solid rgba(0,229,255,0.3)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                  <Shield size={13} style={{ color: '#00e5ff' }} />
+                </div>
+                <div>
+                  <h4 style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: '0.88rem', fontWeight: 800, color: '#f0f4ff', margin: 0 }}>
+                    CadShield Team
+                  </h4>
+                  <span style={{ fontSize: '0.66rem', color: '#00e5ff', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 700 }}>
+                    Official Advisories
+                  </span>
+                </div>
+              </div>
+
+              {unreadCount > 0 && (
+                <button
+                  onClick={handleMarkAll}
+                  style={{
+                    background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)',
+                    borderRadius: 8, padding: '4px 8px', color: '#94a3b8', fontSize: '0.7rem',
+                    cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4,
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.color = '#00e5ff'; e.currentTarget.style.borderColor = 'rgba(0,229,255,0.3)' }}
+                  onMouseLeave={e => { e.currentTarget.style.color = '#94a3b8'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)' }}
+                >
+                  <CheckCheck size={12} /> Mark all read
+                </button>
+              )}
+            </div>
+
+            {/* Notification List */}
+            <div style={{ maxHeight: 380, overflowY: 'auto', padding: '10px 12px' }}>
+              {notifications.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '36px 16px' }}>
+                  <div style={{
+                    width: 44, height: 44, borderRadius: 14,
+                    background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 10px',
+                    color: '#64748b'
+                  }}>
+                    <Bell size={20} />
+                  </div>
+                  <p style={{ color: '#f0f4ff', fontSize: '0.82rem', fontWeight: 600, marginBottom: 4 }}>
+                    No notifications yet
+                  </p>
+                  <p style={{ color: '#64748b', fontSize: '0.74rem', margin: 0, lineHeight: 1.4 }}>
+                    Official announcements and CAD project advisories from CadShield Team will appear here.
+                  </p>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {notifications.map(notif => {
+                    const isUnread = !notif.is_read
+                    const typeColor = {
+                      alert: '#f43f5e',
+                      advisory: '#00e5ff',
+                      verification: '#22c55e',
+                      update: '#a78bfa',
+                    }[notif.type] || '#00e5ff'
+
+                    return (
+                      <div
+                        key={notif.id}
+                        style={{
+                          padding: '12px', borderRadius: 12,
+                          background: isUnread ? 'rgba(0,229,255,0.04)' : 'rgba(255,255,255,0.02)',
+                          border: isUnread ? '1px solid rgba(0,229,255,0.2)' : '1px solid rgba(255,255,255,0.05)',
+                          transition: 'all 0.2s',
+                        }}
+                      >
+                        {/* Sender & Date row */}
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 6 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <span style={{
+                              fontSize: '0.64rem', fontWeight: 800, padding: '2px 6px', borderRadius: 6,
+                              background: 'rgba(0,229,255,0.15)', color: typeColor,
+                              border: `1px solid ${typeColor}40`, textTransform: 'uppercase'
+                            }}>
+                              🛡️ {notif.sender_name || 'CadShield Team'}
+                            </span>
+                            {isUnread && (
+                              <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#00e5ff', boxShadow: '0 0 6px #00e5ff' }} />
+                            )}
+                          </div>
+                          <span style={{ fontSize: '0.68rem', color: '#64748b' }}>
+                            {notif.created_at ? format(new Date(notif.created_at), 'MMM d, h:mm a') : 'Recent'}
+                          </span>
+                        </div>
+
+                        {/* Title */}
+                        <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#f0f4ff', marginBottom: 4 }}>
+                          {notif.title}
+                        </div>
+
+                        {/* Message body */}
+                        <p style={{
+                          fontSize: '0.76rem', color: '#cbd5e1', lineHeight: 1.45,
+                          margin: '0 0 8px 0', whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+                        }}>
+                          {notif.message}
+                        </p>
+
+                        {/* Attached CAD Project chip */}
+                        {(notif.project_id || notif.project_name) && (
+                          <div style={{ marginBottom: 8 }}>
+                            <Link
+                              to={`/viewer?id=${encodeURIComponent(notif.project_id || '')}&projectId=${encodeURIComponent(notif.project_id || '')}`}
+                              onClick={() => {
+                                handleMarkOne(notif.id)
+                                setOpen(false)
+                              }}
+                              style={{ textDecoration: 'none' }}
+                            >
+                              <div style={{
+                                display: 'inline-flex', alignItems: 'center', gap: 6,
+                                padding: '5px 10px', borderRadius: 8,
+                                background: 'rgba(0,229,255,0.08)', border: '1px solid rgba(0,229,255,0.25)',
+                                color: '#00e5ff', fontSize: '0.72rem', fontWeight: 700,
+                                cursor: 'pointer', transition: 'all 0.2s',
+                              }}
+                              onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,229,255,0.18)'}
+                              onMouseLeave={e => e.currentTarget.style.background = 'rgba(0,229,255,0.08)'}
+                              >
+                                <Box size={12} />
+                                <span>CAD Project: {notif.project_name || notif.project_id}</span>
+                                <ExternalLink size={10} />
+                              </div>
+                            </Link>
+                          </div>
+                        )}
+
+                        {/* Actions */}
+                        {isUnread && (
+                          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                            <button
+                              onClick={(e) => handleMarkOne(notif.id, e)}
+                              style={{
+                                background: 'none', border: 'none', color: '#94a3b8',
+                                fontSize: '0.68rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 3,
+                                padding: '2px 4px',
+                              }}
+                              onMouseEnter={e => e.currentTarget.style.color = '#22c55e'}
+                              onMouseLeave={e => e.currentTarget.style.color = '#94a3b8'}
+                            >
+                              <Check size={11} /> Mark as read
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div style={{
+              padding: '10px 16px', borderTop: '1px solid rgba(255,255,255,0.06)',
+              background: 'rgba(4,6,15,0.5)', textAlign: 'center',
+            }}>
+              <Link
+                to="/my-projects"
+                onClick={() => setOpen(false)}
+                style={{ textDecoration: 'none', color: '#94a3b8', fontSize: '0.72rem' }}
+                onMouseEnter={e => e.currentTarget.style.color = '#00e5ff'}
+                onMouseLeave={e => e.currentTarget.style.color = '#94a3b8'}
+              >
+                View all projects in My Projects &rarr;
+              </Link>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  )
+}
 
 function UserMenu({ user }) {
   const [open, setOpen] = useState(false)
@@ -307,6 +616,7 @@ export default function Navbar() {
 
             {/* Right side Profile & Mobile hamburger */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              {user && <NotificationBell user={user} />}
               {user && <UserMenu user={user} />}
               <button onClick={() => setMobileOpen(v => !v)} className="md:hidden" style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 10, padding: 8, color: '#8892a4', cursor: 'pointer' }}>
                 {mobileOpen ? <X size={18} /> : <Menu size={18} />}

@@ -3,23 +3,33 @@ import { Link, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
   FolderLock, Search, Plus, Download, Eye, CheckCircle,
-  ExternalLink, Calendar, ShieldCheck, RefreshCw, Sparkles, Copy, Check
+  ExternalLink, Calendar, ShieldCheck, RefreshCw, Sparkles, Copy, Check,
+  Shield, Bell, MessageSquare, AlertCircle
 } from 'lucide-react'
 import { format } from 'date-fns'
 import toast from 'react-hot-toast'
 import GlassCard from '../components/GlassCard'
 import NeonButton from '../components/NeonButton'
-import { getMyProjects, downloadWatermarkedModel } from '../utils/api'
+import { getMyProjects, downloadWatermarkedModel, getUserNotifications, markNotificationAsRead } from '../utils/api'
 import { getUser } from '../utils/auth'
 
 export default function MyProjectsPage() {
   const navigate = useNavigate()
   const user = getUser() || {}
   const [projects, setProjects] = useState([])
+  const [notifications, setNotifications] = useState([])
   const [loading, setLoading] = useState(true)
   const [query, setQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState('ALL')
   const [copiedId, setCopiedId] = useState(null)
+
+  const loadNotifs = async () => {
+    if (!user) return
+    try {
+      const nList = await getUserNotifications(user)
+      setNotifications(nList || [])
+    } catch (_) {}
+  }
 
   const load = async () => {
     setLoading(true)
@@ -36,10 +46,21 @@ export default function MyProjectsPage() {
   useEffect(() => {
     document.title = 'My CAD Projects – CADShield'
     load()
-    const reload = () => load()
-    window.addEventListener('cadshield-projects-updated', reload)
-    return () => window.removeEventListener('cadshield-projects-updated', reload)
-  }, [])
+    loadNotifs()
+
+    const reloadProjects = () => load()
+    const reloadNotifs = () => loadNotifs()
+
+    window.addEventListener('cadshield-projects-updated', reloadProjects)
+    window.addEventListener('cadshield-notifications-updated', reloadNotifs)
+    window.addEventListener('storage', reloadNotifs)
+
+    return () => {
+      window.removeEventListener('cadshield-projects-updated', reloadProjects)
+      window.removeEventListener('cadshield-notifications-updated', reloadNotifs)
+      window.removeEventListener('storage', reloadNotifs)
+    }
+  }, [user?.user_id, user?.owner_id, user?.email])
 
   const copyProjectId = (pid) => {
     navigator.clipboard.writeText(pid)
@@ -106,6 +127,51 @@ export default function MyProjectsPage() {
             </Link>
           </div>
         </div>
+
+        {/* CadShield Team Broadcast Banner */}
+        {notifications.some(n => !n.is_read) && (
+          <div style={{
+            marginBottom: 20, padding: '12px 18px', borderRadius: 14,
+            background: 'linear-gradient(135deg, rgba(0,229,255,0.08), rgba(139,92,246,0.05))',
+            border: '1px solid rgba(0,229,255,0.25)',
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div style={{
+                width: 28, height: 28, borderRadius: 8,
+                background: 'rgba(0,229,255,0.15)', border: '1px solid rgba(0,229,255,0.3)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#00e5ff',
+              }}>
+                <Shield size={14} />
+              </div>
+              <div>
+                <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#f0f4ff' }}>
+                  {notifications.find(n => !n.is_read)?.title || 'CadShield Team Advisory'}
+                </span>
+                <span style={{ color: '#94a3b8', fontSize: '0.75rem', marginLeft: 8 }}>
+                  — {notifications.find(n => !n.is_read)?.message?.slice(0, 110)}...
+                </span>
+              </div>
+            </div>
+
+            <button
+              onClick={async () => {
+                const unread = notifications.find(n => !n.is_read)
+                if (unread) {
+                  await markNotificationAsRead(unread.id)
+                  loadNotifs()
+                }
+              }}
+              style={{
+                background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
+                color: '#22c55e', fontSize: '0.72rem', fontWeight: 600, borderRadius: 8, padding: '4px 10px',
+                cursor: 'pointer',
+              }}
+            >
+              Mark Read
+            </button>
+          </div>
+        )}
 
         {/* Filters & Search Row */}
         <div style={{ display: 'flex', gap: 12, marginBottom: 24, flexWrap: 'wrap' }}>
@@ -182,6 +248,17 @@ export default function MyProjectsPage() {
               const isWatermarked = proj.status?.toLowerCase() === 'watermarked'
               const isUploaded = !proj.status || proj.status?.toLowerCase() === 'uploaded'
 
+              const projNotifs = notifications.filter(n => {
+                if (!n) return false
+                const pId = String(proj.project_id || '').toLowerCase()
+                const dbId = String(proj.id || '').toLowerCase()
+                const npId = String(n.project_id || '').toLowerCase()
+                const npName = String(n.project_name || '').toLowerCase()
+                const pName = String(proj.project_name || proj.name || '').toLowerCase()
+                return (npId && (npId === pId || npId === dbId)) ||
+                       (npName && pName && (npName === pName || pName.includes(npName) || npName.includes(pName)))
+              })
+
               return (
                 <motion.div
                   key={proj.id || idx}
@@ -247,6 +324,51 @@ export default function MyProjectsPage() {
                           <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#22c55e' }}>{proj.integrity_score ? `${proj.integrity_score}%` : '100%'}</div>
                         </div>
                       </div>
+
+                      {/* CadShield Team Project Advisory */}
+                      {projNotifs.length > 0 && (
+                        <div style={{
+                          marginBottom: 16, padding: '10px 12px', borderRadius: 10,
+                          background: 'linear-gradient(135deg, rgba(0,229,255,0.08), rgba(139,92,246,0.06))',
+                          border: '1px solid rgba(0,229,255,0.25)',
+                        }}>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6, marginBottom: 4 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                              <Shield size={12} style={{ color: '#00e5ff' }} />
+                              <span style={{ fontSize: '0.68rem', fontWeight: 800, color: '#00e5ff', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                                CadShield Team Advisory
+                              </span>
+                              {projNotifs.some(n => !n.is_read) && (
+                                <span style={{ fontSize: '0.6rem', fontWeight: 800, padding: '1px 5px', borderRadius: 99, background: '#ef4444', color: '#fff' }}>
+                                  NEW
+                                </span>
+                              )}
+                            </div>
+                            <span style={{ fontSize: '0.65rem', color: '#94a3b8' }}>
+                              {projNotifs[0].created_at ? format(new Date(projNotifs[0].created_at), 'MMM d') : ''}
+                            </span>
+                          </div>
+                          <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#f0f4ff', marginBottom: 2 }}>
+                            {projNotifs[0].title}
+                          </div>
+                          <div style={{ fontSize: '0.72rem', color: '#cbd5e1', lineHeight: 1.4, maxHeight: 60, overflowY: 'auto', whiteSpace: 'pre-wrap' }}>
+                            {projNotifs[0].message}
+                          </div>
+                          {projNotifs[0].is_read === false && (
+                            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 6 }}>
+                              <button
+                                onClick={async () => {
+                                  await markNotificationAsRead(projNotifs[0].id)
+                                  loadNotifs()
+                                }}
+                                style={{ background: 'none', border: 'none', color: '#22c55e', fontSize: '0.68rem', fontWeight: 700, cursor: 'pointer', padding: 0 }}
+                              >
+                                ✓ Mark read
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
 
                     {/* Actions footer */}

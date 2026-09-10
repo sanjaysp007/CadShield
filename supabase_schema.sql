@@ -426,3 +426,49 @@ SET
 -- - No manual approval in Supabase is needed.
 -- - Direct flow: Register -> Account Created -> Login -> Dashboard.
 -- ==============================================================================
+
+-- ==============================================================================
+-- 11. NOTIFICATIONS TABLE & CADSHIELD TEAM COMMUNICATIONS:
+-- Admins can reach out to users with notifications regarding their CAD projects.
+-- ==============================================================================
+CREATE TABLE IF NOT EXISTS public.notifications (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  recipient_id TEXT NOT NULL,
+  recipient_email TEXT,
+  recipient_name TEXT,
+  sender_name TEXT DEFAULT 'CadShield Team',
+  sender_email TEXT,
+  title TEXT NOT NULL,
+  message TEXT NOT NULL,
+  project_id TEXT,
+  project_name TEXT,
+  type TEXT DEFAULT 'advisory', -- advisory, security, compliance, general
+  is_read BOOLEAN DEFAULT false,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_notifications_recipient ON public.notifications(recipient_id);
+CREATE INDEX IF NOT EXISTS idx_notifications_recipient_email ON public.notifications(recipient_email);
+CREATE INDEX IF NOT EXISTS idx_notifications_project_id ON public.notifications(project_id);
+
+ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Allow authenticated read notifications"
+  ON public.notifications
+  FOR SELECT
+  TO authenticated
+  USING (true);
+
+CREATE POLICY "Allow authenticated insert notifications"
+  ON public.notifications
+  FOR INSERT
+  TO authenticated
+  WITH CHECK (true);
+
+CREATE POLICY "Allow authenticated update notifications"
+  ON public.notifications
+  FOR UPDATE
+  TO authenticated
+  USING (true)
+  WITH CHECK (true);

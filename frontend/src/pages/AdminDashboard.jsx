@@ -5,13 +5,14 @@ import {
   ShieldAlert, Users, ShieldCheck, UserCheck, Search,
   RefreshCw, Copy, Check, Calendar, Phone, Mail, ArrowLeft,
   Lock, AlertTriangle, ExternalLink, Sparkles, Layers, Activity,
-  FileCheck, UserPlus, UserMinus, Building2, BarChart2, Eye
+  FileCheck, UserPlus, UserMinus, Building2, BarChart2, Eye,
+  Send, MessageSquare, Bell, X, Info, CheckCircle2
 } from 'lucide-react'
 import { format } from 'date-fns'
 import toast from 'react-hot-toast'
 import GlassCard from '../components/GlassCard'
 import NeonButton from '../components/NeonButton'
-import { getAdminUsers, updateUserRole, getAdminInsights, getAdminAllModels, getAssetUrl } from '../utils/api'
+import { getAdminUsers, updateUserRole, getAdminInsights, getAdminAllModels, getAssetUrl, sendUserNotification } from '../utils/api'
 import { getUser, isAdmin, isMainAdmin } from '../utils/auth'
 
 export default function AdminDashboard() {
@@ -34,6 +35,18 @@ export default function AdminDashboard() {
   const [copiedId, setCopiedId] = useState(null)
   const [refreshing, setRefreshing] = useState(false)
   const [updatingId, setUpdatingId] = useState(null)
+
+  // Reach Out & Notification State
+  const [reachOutOpen, setReachOutOpen] = useState(false)
+  const [targetRecipient, setTargetRecipient] = useState(null)
+  const [targetProject, setTargetProject] = useState(null)
+  const [notifType, setNotifType] = useState('advisory') // advisory, security, compliance, feedback
+  const [notifTitle, setNotifTitle] = useState('')
+  const [notifMessage, setNotifMessage] = useState('')
+  const [sendingNotif, setSendingNotif] = useState(false)
+
+  // Instant 3D Preview Modal State
+  const [previewModel, setPreviewModel] = useState(null)
 
   useEffect(() => {
     document.title = 'Admin Dashboard – CADShield'
@@ -100,6 +113,81 @@ export default function AdminDashboard() {
     setCopiedId(id)
     toast.success('User ID copied to clipboard!')
     setTimeout(() => setCopiedId(null), 2500)
+  }
+
+  // Open Reach Out / Compose Notification Modal
+  const handleOpenReachOut = (user = null, model = null) => {
+    let recipient = user
+    if (!recipient && model) {
+      recipient = users.find(u =>
+        u.user_id === model.owner_id ||
+        u.user_id === model.creator_user_id ||
+        u.id === model.owner_id ||
+        (u.name && u.name === model.creator_name)
+      ) || {
+        id: model.owner_id || 'user',
+        user_id: model.owner_id || 'OWN-UNKNOWN',
+        name: model.creator_name || 'CAD Creator',
+        email: model.creator_email || null,
+      }
+    }
+
+    setTargetRecipient(recipient)
+    setTargetProject(model ? {
+      id: model.id,
+      project_id: model.project_id || model.id,
+      name: model.project_name || model.name || model.original_filename || 'CAD Project'
+    } : null)
+
+    if (model) {
+      setNotifTitle(`Regarding CAD Project: ${model.project_name || model.name || 'Your Model'}`)
+      setNotifType('advisory')
+      setNotifMessage(`Hello ${recipient?.name || 'Creator'},\n\nThe CadShield Team has reviewed your 3D CAD project "${model.project_name || model.name || 'CAD Model'}".\n\nYour cryptographic watermark and geometric integrity scores have been validated. Please ensure your mesh topology is watertight before physical 3D fabrication.\n\nBest regards,\nCadShield Team`)
+    } else {
+      setNotifTitle(`Advisory from CadShield Team`)
+      setNotifType('advisory')
+      setNotifMessage(`Hello ${recipient?.name || 'Creator'},\n\nWe are reaching out regarding your activity and 3D CAD projects on CADShield.\n\nBest regards,\nCadShield Team`)
+    }
+
+    setReachOutOpen(true)
+  }
+
+  // Send Notification as CadShield Team
+  const handleSendReachOut = async (e) => {
+    if (e && e.preventDefault) e.preventDefault()
+    if (!notifTitle.trim()) {
+      toast.error('Please provide a notification title')
+      return
+    }
+    if (!notifMessage.trim()) {
+      toast.error('Please enter your message')
+      return
+    }
+
+    setSendingNotif(true)
+    try {
+      await sendUserNotification({
+        recipient_id: targetRecipient?.user_id || targetRecipient?.id || 'ALL',
+        recipient_email: targetRecipient?.email,
+        recipient_name: targetRecipient?.name || 'CAD Creator',
+        sender_name: 'CadShield Team',
+        sender_email: currentUser?.email || 'team@cadshield.internal',
+        title: notifTitle.trim(),
+        message: notifMessage.trim(),
+        project_id: targetProject?.project_id || targetProject?.id || null,
+        project_name: targetProject?.name || null,
+        type: notifType,
+      })
+
+      toast.success(`Notification sent from CadShield Team to ${targetRecipient?.name || targetRecipient?.email || 'User'}!`)
+      setReachOutOpen(false)
+      setNotifTitle('')
+      setNotifMessage('')
+    } catch (err) {
+      toast.error(err?.message || 'Failed to send notification')
+    } finally {
+      setSendingNotif(false)
+    }
   }
 
   // Filter users based on search term & role
@@ -177,22 +265,27 @@ export default function AdminDashboard() {
       <div style={{ maxWidth: 1280, margin: '0 auto', padding: '0 16px' }} className="px-3 sm:px-6">
 
         {/* Top Header */}
+        {/* Header */}
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16, marginBottom: 28 }}>
           <div style={{ maxWidth: 720 }}>
             <div style={{
               display: 'inline-flex', alignItems: 'center', gap: 6,
-              padding: '4px 10px', borderRadius: 99,
-              background: 'rgba(139,92,246,0.1)', border: '1px solid rgba(139,92,246,0.25)',
-              color: '#a78bfa', fontSize: '0.72rem', fontWeight: 700, marginBottom: 8,
+              padding: '4px 12px', borderRadius: 99,
+              background: currentIsMainAdmin ? 'rgba(168,85,247,0.12)' : 'rgba(0,229,255,0.12)',
+              border: `1px solid ${currentIsMainAdmin ? 'rgba(168,85,247,0.3)' : 'rgba(0,229,255,0.3)'}`,
+              color: currentIsMainAdmin ? '#c084fc' : '#00e5ff',
+              fontSize: '0.72rem', fontWeight: 700, marginBottom: 8,
               textTransform: 'uppercase', letterSpacing: '0.06em'
             }}>
-              <ShieldCheck size={13} /> Authorized Administration
+              <ShieldCheck size={13} /> {currentIsMainAdmin ? 'Main Administrator (Full Control)' : 'Administrator (Model Previews & User Communications)'}
             </div>
             <h1 style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 'clamp(1.5rem, 4vw, 2.2rem)', fontWeight: 800, color: '#f0f4ff', letterSpacing: '-0.02em', marginBottom: 4 }}>
               Admin <span style={{ background: 'linear-gradient(135deg, #00e5ff, #8b5cf6)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>Dashboard</span>
             </h1>
             <p style={{ color: '#94a3b8', fontSize: '0.86rem', lineHeight: 1.5 }}>
-              Full administrative view into registered users, authentic database statistics, and registered CADShield projects.
+              {currentIsMainAdmin
+                ? 'Full administrative control: manage user permissions, promote administrators, inspect all 3D CAD models, and reach out to users with official CadShield Team advisories.'
+                : 'Preview and inspect all platform 3D CAD models, monitor cryptographic integrity scores, and reach out to creators with official notifications from the CadShield Team.'}
             </p>
           </div>
 
@@ -457,39 +550,56 @@ export default function AdminDashboard() {
                               {u.created_at ? format(new Date(u.created_at), 'MMM d, yyyy') : 'Recent'}
                             </td>
 
-                            {/* Action: Manage Role */}
+                            {/* Action: Reach Out & Manage Role */}
                             <td style={{ padding: '14px 20px', textAlign: 'right' }}>
-                              {isRowMainAdmin ? (
-                                <span style={{
-                                  display: 'inline-flex', alignItems: 'center', gap: 4,
-                                  padding: '4px 10px', borderRadius: 8, fontSize: '0.72rem', fontWeight: 700,
-                                  background: 'rgba(168,85,247,0.08)', color: '#c084fc', border: '1px solid rgba(168,85,247,0.25)'
-                                }}>
-                                  <ShieldCheck size={12} /> Protected
-                                </span>
-                              ) : currentIsMainAdmin ? (
-                                !isSelf ? (
-                                  <button
-                                    disabled={updatingId === u.id}
-                                    onClick={() => handleRoleToggle(u)}
-                                    style={{
-                                      padding: '5px 12px', borderRadius: 8, fontSize: '0.72rem', fontWeight: 600, cursor: updatingId === u.id ? 'not-allowed' : 'pointer',
-                                      border: isRowAdmin ? '1px solid rgba(244,63,94,0.3)' : '1px solid rgba(34,197,94,0.3)',
-                                      background: isRowAdmin ? 'rgba(244,63,94,0.08)' : 'rgba(34,197,94,0.08)',
-                                      color: isRowAdmin ? '#f43f5e' : '#22c55e',
-                                      transition: 'all 0.2s',
-                                    }}
-                                  >
-                                    {updatingId === u.id ? 'Saving...' : isRowAdmin ? 'Demote to User' : 'Promote to Admin'}
-                                  </button>
+                              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, justifyContent: 'flex-end' }}>
+                                <button
+                                  onClick={() => handleOpenReachOut(u, null)}
+                                  style={{
+                                    padding: '5px 11px', borderRadius: 8, fontSize: '0.72rem', fontWeight: 600,
+                                    background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.3)',
+                                    color: '#c084fc', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4,
+                                    transition: 'all 0.2s',
+                                  }}
+                                  onMouseEnter={e => e.currentTarget.style.background = 'rgba(139,92,246,0.22)'}
+                                  onMouseLeave={e => e.currentTarget.style.background = 'rgba(139,92,246,0.12)'}
+                                  title="Reach Out to user from CadShield Team"
+                                >
+                                  <Send size={11} /> Reach Out
+                                </button>
+
+                                {isRowMainAdmin ? (
+                                  <span style={{
+                                    display: 'inline-flex', alignItems: 'center', gap: 4,
+                                    padding: '4px 10px', borderRadius: 8, fontSize: '0.72rem', fontWeight: 700,
+                                    background: 'rgba(168,85,247,0.08)', color: '#c084fc', border: '1px solid rgba(168,85,247,0.25)'
+                                  }}>
+                                    <ShieldCheck size={12} /> Protected
+                                  </span>
+                                ) : currentIsMainAdmin ? (
+                                  !isSelf ? (
+                                    <button
+                                      disabled={updatingId === u.id}
+                                      onClick={() => handleRoleToggle(u)}
+                                      style={{
+                                        padding: '5px 12px', borderRadius: 8, fontSize: '0.72rem', fontWeight: 600, cursor: updatingId === u.id ? 'not-allowed' : 'pointer',
+                                        border: isRowAdmin ? '1px solid rgba(244,63,94,0.3)' : '1px solid rgba(34,197,94,0.3)',
+                                        background: isRowAdmin ? 'rgba(244,63,94,0.08)' : 'rgba(34,197,94,0.08)',
+                                        color: isRowAdmin ? '#f43f5e' : '#22c55e',
+                                        transition: 'all 0.2s',
+                                      }}
+                                    >
+                                      {updatingId === u.id ? 'Saving...' : isRowAdmin ? 'Demote to User' : 'Promote to Admin'}
+                                    </button>
+                                  ) : (
+                                    <span style={{ color: '#94a3b8', fontSize: '0.72rem' }}>You (Main Admin)</span>
+                                  )
                                 ) : (
-                                  <span style={{ color: '#94a3b8', fontSize: '0.72rem' }}>You (Main Admin)</span>
-                                )
-                              ) : (
-                                <span style={{ color: '#94a3b8', fontSize: '0.72rem' }}>
-                                  {isSelf ? 'You (Admin)' : 'Main Admin Managed'}
-                                </span>
-                              )}
+                                  <span style={{ color: '#94a3b8', fontSize: '0.72rem', padding: '4px 8px' }}>
+                                    {isSelf ? 'You (Admin)' : 'User Managed'}
+                                  </span>
+                                )}
+                              </div>
                             </td>
                           </tr>
                         )
@@ -643,14 +753,45 @@ export default function AdminDashboard() {
                           {m.created_at ? format(new Date(m.created_at), 'MMM d, yyyy') : 'Recent'}
                         </td>
                         <td style={{ padding: '14px 16px' }}>
-                          <div style={{ display: 'flex', gap: 6 }}>
-                            <Link to={`/viewer?id=${encodeURIComponent(m.id || '')}&projectId=${encodeURIComponent(m.project_id || '')}`} style={{ textDecoration: 'none' }}>
-                              <button style={{
+                          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                            <button
+                              onClick={() => setPreviewModel(m)}
+                              style={{
                                 padding: '5px 10px', borderRadius: 6, fontSize: '0.72rem', fontWeight: 600,
                                 background: 'rgba(0,229,255,0.1)', border: '1px solid rgba(0,229,255,0.25)',
                                 color: '#00e5ff', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4,
-                              }}>
-                                <Eye size={12} /> 3D View
+                                transition: 'all 0.2s',
+                              }}
+                              onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,229,255,0.18)'}
+                              onMouseLeave={e => e.currentTarget.style.background = 'rgba(0,229,255,0.1)'}
+                              title="Instant 3D Mesh Preview"
+                            >
+                              <Eye size={12} /> 3D Preview
+                            </button>
+
+                            <button
+                              onClick={() => handleOpenReachOut(null, m)}
+                              style={{
+                                padding: '5px 10px', borderRadius: 6, fontSize: '0.72rem', fontWeight: 600,
+                                background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.3)',
+                                color: '#c084fc', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4,
+                                transition: 'all 0.2s',
+                              }}
+                              onMouseEnter={e => e.currentTarget.style.background = 'rgba(139,92,246,0.22)'}
+                              onMouseLeave={e => e.currentTarget.style.background = 'rgba(139,92,246,0.12)'}
+                              title="Reach Out to Creator from CadShield Team"
+                            >
+                              <Send size={11} /> Reach Out
+                            </button>
+
+                            <Link to={`/viewer?id=${encodeURIComponent(m.id || '')}&projectId=${encodeURIComponent(m.project_id || '')}`} style={{ textDecoration: 'none' }}>
+                              <button style={{
+                                padding: '5px 8px', borderRadius: 6, fontSize: '0.72rem', fontWeight: 500,
+                                background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)',
+                                color: '#94a3b8', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4,
+                              }}
+                              title="Open Full Viewer">
+                                <ExternalLink size={11} />
                               </button>
                             </Link>
                           </div>
@@ -665,6 +806,304 @@ export default function AdminDashboard() {
         )}
 
       </div>
+
+      {/* ── MODAL 1: REACH OUT FROM CADSHIELD TEAM ─────────────── */}
+      <AnimatePresence>
+        {reachOutOpen && (
+          <div style={{
+            position: 'fixed', inset: 0, zIndex: 300,
+            background: 'rgba(2,6,23,0.85)', backdropFilter: 'blur(12px)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20
+          }}>
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              style={{ width: '100%', maxWidth: 560 }}
+            >
+              <GlassCard glow="purple" style={{ padding: 28, position: 'relative' }}>
+                {/* Close Button */}
+                <button
+                  onClick={() => setReachOutOpen(false)}
+                  style={{
+                    position: 'absolute', top: 18, right: 18,
+                    background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: 4
+                  }}
+                >
+                  <X size={18} />
+                </button>
+
+                {/* Modal Header */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+                  <div style={{
+                    width: 42, height: 42, borderRadius: 12,
+                    background: 'linear-gradient(135deg, rgba(139,92,246,0.2), rgba(0,229,255,0.2))',
+                    border: '1px solid rgba(139,92,246,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    color: '#c084fc', boxShadow: '0 0 20px rgba(139,92,246,0.2)'
+                  }}>
+                    <MessageSquare size={20} />
+                  </div>
+                  <div>
+                    <h3 style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: '1.2rem', fontWeight: 700, color: '#f0f4ff', margin: 0 }}>
+                      Reach Out &bull; CadShield Team
+                    </h3>
+                    <p style={{ color: '#94a3b8', fontSize: '0.8rem', margin: '2px 0 0' }}>
+                      Send an official notification or advisory to the user regarding their CAD projects.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Recipient info badge */}
+                <div style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10,
+                  padding: '10px 14px', borderRadius: 12, background: 'rgba(255,255,255,0.03)',
+                  border: '1px solid rgba(255,255,255,0.06)', marginBottom: 16
+                }}>
+                  <div>
+                    <div style={{ fontSize: '0.68rem', color: '#94a3b8', textTransform: 'uppercase', fontWeight: 600 }}>Recipient</div>
+                    <div style={{ fontSize: '0.88rem', fontWeight: 700, color: '#f0f4ff' }}>
+                      {targetRecipient?.name || 'CAD Creator'} <span style={{ color: '#94a3b8', fontWeight: 400 }}>({targetRecipient?.email || targetRecipient?.user_id})</span>
+                    </div>
+                  </div>
+                  <div style={{ textAlign: 'right' }}>
+                    <div style={{ fontSize: '0.68rem', color: '#94a3b8', textTransform: 'uppercase', fontWeight: 600 }}>Sender</div>
+                    <div style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 4,
+                      padding: '2px 8px', borderRadius: 99, background: 'rgba(0,229,255,0.1)',
+                      border: '1px solid rgba(0,229,255,0.25)', color: '#00e5ff', fontSize: '0.72rem', fontWeight: 700
+                    }}>
+                      <ShieldCheck size={12} /> CadShield Team
+                    </div>
+                  </div>
+                </div>
+
+                {/* Form */}
+                <form onSubmit={handleSendReachOut}>
+                  {/* Linked Project (if any) */}
+                  <div style={{ marginBottom: 14 }}>
+                    <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', marginBottom: 6 }}>
+                      Related CAD Project
+                    </label>
+                    <div style={{
+                      padding: '9px 12px', borderRadius: 10, background: 'rgba(255,255,255,0.02)',
+                      border: '1px solid rgba(255,255,255,0.08)', color: targetProject ? '#a78bfa' : '#94a3b8',
+                      fontSize: '0.82rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between'
+                    }}>
+                      <span>{targetProject ? `📦 ${targetProject.name} (${targetProject.project_id || targetProject.id})` : 'General Platform Advisory (No specific project)'}</span>
+                      {targetProject && (
+                        <button
+                          type="button"
+                          onClick={() => setTargetProject(null)}
+                          style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: '0.72rem' }}
+                        >
+                          Clear
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Notification Type */}
+                  <div style={{ marginBottom: 14 }}>
+                    <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', marginBottom: 6 }}>
+                      Notification Category
+                    </label>
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                      {[
+                        { id: 'advisory', label: 'Advisory', color: '#00e5ff' },
+                        { id: 'security', label: 'Security Notice', color: '#f43f5e' },
+                        { id: 'compliance', label: 'Watermark Check', color: '#a78bfa' },
+                        { id: 'feedback', label: 'Fabrication Review', color: '#22c55e' },
+                      ].map(t => (
+                        <button
+                          key={t.id}
+                          type="button"
+                          onClick={() => setNotifType(t.id)}
+                          style={{
+                            padding: '5px 12px', borderRadius: 8, fontSize: '0.75rem', fontWeight: 600,
+                            cursor: 'pointer', transition: 'all 0.2s',
+                            background: notifType === t.id ? `${t.color}20` : 'rgba(255,255,255,0.03)',
+                            border: `1px solid ${notifType === t.id ? t.color : 'rgba(255,255,255,0.08)'}`,
+                            color: notifType === t.id ? t.color : '#cbd5e1'
+                          }}
+                        >
+                          {t.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Title */}
+                  <div style={{ marginBottom: 14 }}>
+                    <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', marginBottom: 6 }}>
+                      Subject / Title
+                    </label>
+                    <input
+                      type="text"
+                      value={notifTitle}
+                      onChange={e => setNotifTitle(e.target.value)}
+                      placeholder="e.g. Notice regarding your project: Horse V7"
+                      required
+                      style={{
+                        width: '100%', padding: '10px 12px', borderRadius: 10,
+                        background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)',
+                        color: '#f0f4ff', fontSize: '0.85rem', outline: 'none',
+                      }}
+                    />
+                  </div>
+
+                  {/* Message Textarea */}
+                  <div style={{ marginBottom: 20 }}>
+                    <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', marginBottom: 6 }}>
+                      Message from CadShield Team
+                    </label>
+                    <textarea
+                      rows={5}
+                      value={notifMessage}
+                      onChange={e => setNotifMessage(e.target.value)}
+                      placeholder="Write your note or advisory to the user..."
+                      required
+                      style={{
+                        width: '100%', padding: '10px 12px', borderRadius: 10,
+                        background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)',
+                        color: '#f0f4ff', fontSize: '0.85rem', outline: 'none', resize: 'vertical'
+                      }}
+                    />
+                  </div>
+
+                  {/* Action Buttons */}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 10 }}>
+                    <button
+                      type="button"
+                      onClick={() => setReachOutOpen(false)}
+                      style={{
+                        padding: '9px 16px', borderRadius: 10, background: 'rgba(255,255,255,0.04)',
+                        border: '1px solid rgba(255,255,255,0.08)', color: '#cbd5e1', fontSize: '0.82rem',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={sendingNotif}
+                      style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 8,
+                        padding: '9px 20px', borderRadius: 10,
+                        background: 'linear-gradient(135deg, #00e5ff, #8b5cf6)',
+                        border: 'none', color: '#04060f', fontWeight: 700, fontSize: '0.85rem',
+                        cursor: sendingNotif ? 'not-allowed' : 'pointer',
+                        boxShadow: '0 0 20px rgba(0,229,255,0.3)'
+                      }}
+                    >
+                      <Send size={14} /> {sendingNotif ? 'Sending...' : 'Send Notification'}
+                    </button>
+                  </div>
+                </form>
+              </GlassCard>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ── MODAL 2: INSTANT 3D CAD MODEL PREVIEW ──────────────── */}
+      <AnimatePresence>
+        {previewModel && (
+          <div style={{
+            position: 'fixed', inset: 0, zIndex: 300,
+            background: 'rgba(2,6,23,0.85)', backdropFilter: 'blur(12px)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20
+          }}>
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              style={{ width: '100%', maxWidth: 780 }}
+            >
+              <GlassCard glow="cyan" style={{ padding: 24, position: 'relative' }}>
+                {/* Header */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <h3 style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: '1.2rem', fontWeight: 700, color: '#f0f4ff', margin: 0 }}>
+                        {previewModel.project_name || previewModel.name || 'CAD Model Preview'}
+                      </h3>
+                      <span style={{
+                        fontSize: '0.68rem', fontWeight: 700, padding: '2px 8px', borderRadius: 99,
+                        background: 'rgba(0,229,255,0.1)', border: '1px solid rgba(0,229,255,0.25)', color: '#00e5ff'
+                      }}>
+                        {(previewModel.file_format || 'STL').toUpperCase()}
+                      </span>
+                    </div>
+                    <p style={{ color: '#94a3b8', fontSize: '0.78rem', margin: '4px 0 0' }}>
+                      Owner: <span style={{ color: '#00e5ff', fontFamily: 'monospace' }}>{previewModel.owner_id || previewModel.user_id || '—'}</span> &bull; Status: <span style={{ color: '#22c55e' }}>{previewModel.status || 'Active'}</span>
+                    </p>
+                  </div>
+
+                  <button
+                    onClick={() => setPreviewModel(null)}
+                    style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: 4 }}
+                  >
+                    <X size={20} />
+                  </button>
+                </div>
+
+                {/* 3D Viewer Frame */}
+                <div style={{
+                  height: 380, borderRadius: 16, overflow: 'hidden',
+                  background: 'radial-gradient(ellipse at center, rgba(0,229,255,0.05) 0%, rgba(4,6,15,0.95) 75%)',
+                  border: '1px solid rgba(0,229,255,0.2)', position: 'relative'
+                }}>
+                  <iframe
+                    src={`/viewer?id=${encodeURIComponent(previewModel.id || '')}&projectId=${encodeURIComponent(previewModel.project_id || '')}`}
+                    style={{ width: '100%', height: '100%', border: 'none' }}
+                    title="3D Preview"
+                  />
+                </div>
+
+                {/* Footer actions */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 16, flexWrap: 'wrap', gap: 10 }}>
+                  <div style={{ fontSize: '0.8rem', color: '#cbd5e1' }}>
+                    Integrity Score: <strong style={{ color: '#22c55e' }}>{previewModel.integrity_score ? `${previewModel.integrity_score}%` : '100%'}</strong>
+                  </div>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button
+                      onClick={() => {
+                        const m = previewModel
+                        setPreviewModel(null)
+                        handleOpenReachOut(null, m)
+                      }}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 6,
+                        padding: '8px 14px', borderRadius: 10,
+                        background: 'rgba(139,92,246,0.15)', border: '1px solid rgba(139,92,246,0.3)',
+                        color: '#c084fc', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer'
+                      }}
+                    >
+                      <Send size={13} /> Reach Out to Creator
+                    </button>
+                    <Link
+                      to={`/viewer?id=${encodeURIComponent(previewModel.id || '')}&projectId=${encodeURIComponent(previewModel.project_id || '')}`}
+                      style={{ textDecoration: 'none' }}
+                    >
+                      <button
+                        style={{
+                          display: 'flex', alignItems: 'center', gap: 6,
+                          padding: '8px 16px', borderRadius: 10,
+                          background: 'linear-gradient(135deg, rgba(0,229,255,0.2), rgba(139,92,246,0.2))',
+                          border: '1px solid rgba(0,229,255,0.35)', color: '#00e5ff', fontSize: '0.8rem',
+                          fontWeight: 700, cursor: 'pointer'
+                        }}
+                      >
+                        <ExternalLink size={13} /> Open Full Viewer &rarr;
+                      </button>
+                    </Link>
+                  </div>
+                </div>
+              </GlassCard>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }

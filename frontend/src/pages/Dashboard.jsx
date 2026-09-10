@@ -12,7 +12,7 @@ import {
   LineElement, BarElement, ArcElement, Tooltip, Legend, Filler
 } from 'chart.js'
 import { Line, Doughnut, Bar } from 'react-chartjs-2'
-import { getDashboardStats, getModels, getMyProjects, getVerificationHistory, downloadWatermarkedModel, getAssetUrl } from '../utils/api'
+import { getDashboardStats, getModels, getMyProjects, getVerificationHistory, downloadWatermarkedModel, getAssetUrl, getUserNotifications, markNotificationAsRead } from '../utils/api'
 import { getUser, logout } from '../utils/auth'
 import { supabase } from '../utils/supabase'
 import { format } from 'date-fns'
@@ -136,6 +136,7 @@ export default function Dashboard() {
   const [stats, setStats] = useState(null)
   const [models, setModels] = useState([])
   const [myProjects, setMyProjects] = useState([])
+  const [notifications, setNotifications] = useState([])
   const [refreshing, setRefreshing] = useState(false)
   const [lineData, setLineData] = useState(() => buildLineData([]))
   const [user, setUser] = useState(() => getUser() || {})
@@ -151,16 +152,18 @@ export default function Dashboard() {
 
   const load = async () => {
     try {
-      const [s, m, p, v] = await Promise.all([
+      const [s, m, p, v, notifs] = await Promise.all([
         getDashboardStats(),
         getModels(),
         getMyProjects(),
         getVerificationHistory(),
+        getUserNotifications(user),
       ])
       setStats(s)
       setModels(m.slice(0, 5))
       setMyProjects(p || [])
       setLineData(buildLineData(v || []))
+      setNotifications(notifs || [])
     } finally {
       setRefreshing(false)
     }
@@ -169,18 +172,27 @@ export default function Dashboard() {
   useEffect(() => {
     load()
 
+    const onNotifUpdate = () => {
+      getUserNotifications(user).then(list => setNotifications(list || []))
+    }
+    window.addEventListener('cadshield-notifications-updated', onNotifUpdate)
+    window.addEventListener('storage', onNotifUpdate)
+
     // ── Realtime subscription to Supabase changes ─────────────
     const channel = supabase
       .channel('dashboard-realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'models' }, () => load())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => load())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'verifications' }, () => load())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications' }, () => load())
       .subscribe()
 
     return () => {
+      window.removeEventListener('cadshield-notifications-updated', onNotifUpdate)
+      window.removeEventListener('storage', onNotifUpdate)
       supabase.removeChannel(channel)
     }
-  }, [])
+  }, [user?.user_id, user?.owner_id, user?.email])
 
   const copyId = () => {
     const id = user.user_id || user.owner_id || ''
@@ -366,6 +378,90 @@ export default function Dashboard() {
 
             </div>
           </GlassCard>
+
+          {/* ── CADSHIELD TEAM ADVISORIES BANNER ──────────────── */}
+          {notifications.length > 0 && (
+            <GlassCard glow="cyan" style={{ padding: '16px 20px', marginBottom: 20, border: '1px solid rgba(0,229,255,0.25)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <div style={{
+                    width: 28, height: 28, borderRadius: 8,
+                    background: 'rgba(0,229,255,0.15)', border: '1px solid rgba(0,229,255,0.3)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    <Shield size={14} style={{ color: '#00e5ff' }} />
+                  </div>
+                  <div>
+                    <h3 style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: '0.95rem', fontWeight: 800, color: '#f0f4ff', margin: 0 }}>
+                      CadShield Team Advisories & Notifications
+                    </h3>
+                    <p style={{ fontSize: '0.72rem', color: '#94a3b8', margin: 0 }}>
+                      Official communication regarding your 3D CAD models and platform updates
+                    </p>
+                  </div>
+                </div>
+
+                <span style={{
+                  fontSize: '0.68rem', fontWeight: 800, padding: '3px 8px', borderRadius: 99,
+                  background: 'rgba(0,229,255,0.1)', color: '#00e5ff', border: '1px solid rgba(0,229,255,0.3)',
+                }}>
+                  {notifications.filter(n => !n.is_read).length} UNREAD
+                </span>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 12 }}>
+                {notifications.slice(0, 2).map(n => (
+                  <div key={n.id} style={{
+                    padding: '12px 14px', borderRadius: 12,
+                    background: !n.is_read ? 'rgba(0,229,255,0.04)' : 'rgba(255,255,255,0.02)',
+                    border: !n.is_read ? '1px solid rgba(0,229,255,0.25)' : '1px solid rgba(255,255,255,0.06)',
+                    display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
+                  }}>
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6, marginBottom: 4 }}>
+                        <span style={{ fontSize: '0.65rem', fontWeight: 800, color: '#00e5ff', textTransform: 'uppercase' }}>
+                          🛡️ {n.sender_name || 'CadShield Team'}
+                        </span>
+                        <span style={{ fontSize: '0.65rem', color: '#64748b' }}>
+                          {n.created_at ? format(new Date(n.created_at), 'MMM d, h:mm a') : ''}
+                        </span>
+                      </div>
+                      <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#f0f4ff', marginBottom: 4 }}>
+                        {n.title}
+                      </div>
+                      <p style={{ fontSize: '0.74rem', color: '#cbd5e1', lineHeight: 1.4, margin: '0 0 8px 0' }}>
+                        {n.message?.length > 120 ? `${n.message.slice(0, 120)}...` : n.message}
+                      </p>
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6, marginTop: 4 }}>
+                      {(n.project_id || n.project_name) ? (
+                        <Link
+                          to={`/viewer?id=${encodeURIComponent(n.project_id || '')}&projectId=${encodeURIComponent(n.project_id || '')}`}
+                          style={{ textDecoration: 'none', color: '#00e5ff', fontSize: '0.72rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 4 }}
+                        >
+                          <span>Open CAD Model &rarr;</span>
+                        </Link>
+                      ) : <span />}
+
+                      {!n.is_read && (
+                        <button
+                          onClick={async () => {
+                            await markNotificationAsRead(n.id)
+                            const list = await getUserNotifications(user)
+                            setNotifications(list || [])
+                          }}
+                          style={{ background: 'none', border: 'none', color: '#22c55e', fontSize: '0.7rem', fontWeight: 600, cursor: 'pointer' }}
+                        >
+                          ✓ Mark read
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </GlassCard>
+          )}
 
           {/* Stats bento */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', gap: 14, marginBottom: 20 }}

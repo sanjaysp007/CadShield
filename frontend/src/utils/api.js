@@ -1534,3 +1534,153 @@ export async function getAnalytics(modelId) {
 }
 
 export async function isBackendAvailable() { return checkBackend() }
+
+// ── Notifications System (CadShield Team Reach Out) ───────────────
+const NOTIFICATIONS_STORAGE_KEY = 'cadshield_notifications'
+
+export function getStoredNotifications() {
+  try {
+    const raw = localStorage.getItem(NOTIFICATIONS_STORAGE_KEY)
+    return raw ? JSON.parse(raw) : []
+  } catch {
+    return []
+  }
+}
+
+export function saveStoredNotifications(notifications) {
+  try {
+    localStorage.setItem(NOTIFICATIONS_STORAGE_KEY, JSON.stringify(notifications))
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('cadshield-notifications-updated'))
+    }
+  } catch (_) {}
+}
+
+export async function sendUserNotification({
+  recipient_id,
+  recipient_email,
+  recipient_name,
+  sender_name = 'CadShield Team',
+  sender_email = 'team@cadshield.internal',
+  title,
+  message,
+  project_id = null,
+  project_name = null,
+  type = 'advisory',
+}) {
+  const notifId = `notif_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`
+  const now = new Date().toISOString()
+
+  const newNotif = {
+    id: notifId,
+    recipient_id: String(recipient_id || '').trim(),
+    recipient_email: recipient_email ? String(recipient_email).toLowerCase().trim() : null,
+    recipient_name: recipient_name || 'CAD User',
+    sender_name: sender_name || 'CadShield Team',
+    sender_email: sender_email || 'team@cadshield.internal',
+    title: title.trim(),
+    message: message.trim(),
+    project_id: project_id ? String(project_id).trim() : null,
+    project_name: project_name ? String(project_name).trim() : null,
+    type: type || 'advisory',
+    is_read: false,
+    created_at: now,
+  }
+
+  // 1. Save to local storage
+  const list = getStoredNotifications()
+  list.unshift(newNotif)
+  saveStoredNotifications(list)
+
+  // 2. Sync to Supabase notifications table if available
+  try {
+    await supabase.from('notifications').insert([newNotif])
+  } catch (err) {
+    console.warn('Supabase notification sync note (persisted locally):', err?.message)
+  }
+
+  return newNotif
+}
+
+export async function getUserNotifications(user) {
+  if (!user) return []
+  const list = getStoredNotifications()
+
+  const uid = (user.user_id || user.owner_id || user.id || '').toLowerCase()
+  const email = (user.email || '').toLowerCase()
+  const id = (user.id || '').toLowerCase()
+
+  // Try fetching latest from Supabase
+  try {
+    const { data, error } = await supabase
+      .from('notifications')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(50)
+
+    if (!error && Array.isArray(data) && data.length > 0) {
+      for (const sn of data) {
+        if (!list.some(n => n.id === sn.id)) {
+          list.push(sn)
+        }
+      }
+    }
+  } catch (_) {}
+
+  // Filter for notifications intended for this user or broadcast 'ALL'
+  const userNotifs = list.filter(n => {
+    const rId = (n.recipient_id || '').toLowerCase()
+    const rEmail = (n.recipient_email || '').toLowerCase()
+    return (
+      rId === 'all' ||
+      rId === uid ||
+      rId === id ||
+      (email && rEmail === email) ||
+      (email && rId === email)
+    )
+  })
+
+  return userNotifs.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0))
+}
+
+export async function markNotificationAsRead(notifId) {
+  if (!notifId) return
+  const list = getStoredNotifications()
+  const idx = list.findIndex(n => n.id === notifId)
+  if (idx >= 0) {
+    list[idx].is_read = true
+    saveStoredNotifications(list)
+  }
+
+  try {
+    await supabase.from('notifications').update({ is_read: true }).eq('id', notifId)
+  } catch (_) {}
+}
+
+export async function markAllNotificationsAsRead(user) {
+  if (!user) return
+  const uid = (user.user_id || user.owner_id || user.id || '').toLowerCase()
+  const email = (user.email || '').toLowerCase()
+
+  const list = getStoredNotifications()
+  let modified = false
+  list.forEach(n => {
+    const rId = (n.recipient_id || '').toLowerCase()
+    const rEmail = (n.recipient_email || '').toLowerCase()
+    if (rId === 'all' || rId === uid || (email && (rEmail === email || rId === email))) {
+      n.is_read = true
+      modified = true
+    }
+  })
+
+  if (modified) {
+    saveStoredNotifications(list)
+  }
+
+  try {
+    await supabase
+      .from('notifications')
+      .update({ is_read: true })
+      .or(`recipient_id.eq.${uid},recipient_email.eq.${email}`)
+  } catch (_) {}
+}
