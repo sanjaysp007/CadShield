@@ -157,12 +157,25 @@ export async function signup(email, password, fullName, organization) {
       }
     }
 
-    if (session?.access_token) {
-      saveAuth(session.access_token, userObj)
+    let finalSession = session
+    if (!finalSession?.access_token) {
+      try {
+        const { data: signinData } = await supabase.auth.signInWithPassword({
+          email: cleanEmail,
+          password,
+        })
+        if (signinData?.session) {
+          finalSession = signinData.session
+        }
+      } catch (_) {}
+    }
+
+    if (finalSession?.access_token) {
+      saveAuth(finalSession.access_token, userObj)
     }
 
     return {
-      session,
+      session: finalSession,
       user: userObj,
       owner_id,
     }
@@ -292,6 +305,22 @@ export async function getAdminUsers() {
 }
 
 export async function updateUserRole(profileId, newRole) {
+  // Validate allowed target roles
+  if (!['admin', 'user'].includes(newRole)) {
+    throw new Error('Invalid role specified. Only "admin" and "user" roles can be assigned.')
+  }
+
+  // Fetch target profile to verify it is not the protected Main Admin
+  const { data: targetProfile, error: fetchErr } = await supabase
+    .from('profiles')
+    .select('role, email')
+    .eq('id', profileId)
+    .maybeSingle()
+
+  if (targetProfile?.role === 'main_admin') {
+    throw new Error('The Main Administrator is protected and cannot be modified or demoted.')
+  }
+
   const { data, error } = await supabase
     .from('profiles')
     .update({ role: newRole })
@@ -305,6 +334,7 @@ export async function updateUserRole(profileId, newRole) {
 export async function getAdminInsights() {
   const stats = {
     totalUsers: 0,
+    mainAdminUsers: 0,
     adminUsers: 0,
     standardUsers: 0,
     totalModels: 0,
@@ -318,10 +348,13 @@ export async function getAdminInsights() {
     const { count: uCount } = await supabase.from('profiles').select('*', { count: 'exact', head: true })
     if (uCount !== null) stats.totalUsers = uCount
 
+    const { count: maCount } = await supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('role', 'main_admin')
+    if (maCount !== null) stats.mainAdminUsers = maCount
+
     const { count: aCount } = await supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('role', 'admin')
     if (aCount !== null) stats.adminUsers = aCount
 
-    stats.standardUsers = Math.max(0, stats.totalUsers - stats.adminUsers)
+    stats.standardUsers = Math.max(0, stats.totalUsers - stats.adminUsers - stats.mainAdminUsers)
 
     const { count: mCount } = await supabase.from('models').select('*', { count: 'exact', head: true })
     if (mCount !== null) stats.totalModels = mCount

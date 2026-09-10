@@ -1,9 +1,38 @@
 -- ==============================================================================
--- CADSHIELD - SUPABASE PROFILES TABLE & ROW LEVEL SECURITY (RLS) SETUP
+-- CADSHIELD - DATABASE SCHEMA, AUTO-ACTIVATION & 3-TIER ROLE SECURITY (RLS) SETUP
 -- Run this script in your Supabase Project -> SQL Editor
 -- ==============================================================================
 
--- 1. Create the 'profiles' table if it doesn't already exist
+-- ==============================================================================
+-- 0. AUTOMATIC USER CONFIRMATION & DIRECT REGISTRATION
+-- Every new user is automatically confirmed immediately on registration.
+-- No manual approval, no OTP, no admin confirmation required!
+-- ==============================================================================
+CREATE OR REPLACE FUNCTION public.auto_confirm_new_user()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  NEW.email_confirmed_at = COALESCE(NEW.email_confirmed_at, NOW());
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS on_auth_user_created_confirm ON auth.users;
+CREATE TRIGGER on_auth_user_created_confirm
+  BEFORE INSERT ON auth.users
+  FOR EACH ROW EXECUTE FUNCTION public.auto_confirm_new_user();
+
+-- Auto-confirm any existing unconfirmed accounts
+UPDATE auth.users
+SET email_confirmed_at = NOW()
+WHERE email_confirmed_at IS NULL;
+
+-- ==============================================================================
+-- 1. PROFILES TABLE (3 ROLES: 'main_admin', 'admin', 'user')
+-- ==============================================================================
 CREATE TABLE IF NOT EXISTS public.profiles (
   id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   user_id TEXT NOT NULL,
@@ -21,7 +50,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   updated_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now())
 );
 
--- Ensure non-sensitive columns exist even if the table already existed
+-- Ensure non-sensitive columns exist if the table already existed
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'profiles' AND column_name = 'role') THEN
@@ -47,7 +76,11 @@ BEGIN
   END IF;
 END $$;
 
--- 2. Create index for fast lookups
+-- Drop old check constraint if present and enforce 3-tier roles
+ALTER TABLE public.profiles DROP CONSTRAINT IF EXISTS chk_profiles_role;
+ALTER TABLE public.profiles ADD CONSTRAINT chk_profiles_role CHECK (role IN ('main_admin', 'admin', 'user'));
+
+-- Indexes for fast lookups
 CREATE INDEX IF NOT EXISTS idx_profiles_user_id ON public.profiles(user_id);
 CREATE INDEX IF NOT EXISTS idx_profiles_role ON public.profiles(role);
 CREATE INDEX IF NOT EXISTS idx_profiles_email ON public.profiles(email);
@@ -102,7 +135,7 @@ CREATE INDEX IF NOT EXISTS idx_verifications_model_id ON public.verifications(mo
 CREATE INDEX IF NOT EXISTS idx_verifications_is_tampered ON public.verifications(is_tampered);
 CREATE INDEX IF NOT EXISTS idx_verifications_verified_at ON public.verifications(verified_at);
 
--- 4. Security Definer Helper Function to check if the current user is an admin
+-- 4. Helper Functions: Role Verification
 CREATE OR REPLACE FUNCTION public.is_admin()
 RETURNS BOOLEAN
 LANGUAGE sql
@@ -111,7 +144,19 @@ SET search_path = public
 AS $$
   SELECT EXISTS (
     SELECT 1 FROM public.profiles
-    WHERE id = auth.uid() AND role = 'admin'
+    WHERE id = auth.uid() AND role IN ('admin', 'main_admin')
+  );
+$$;
+
+CREATE OR REPLACE FUNCTION public.is_main_admin()
+RETURNS BOOLEAN
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.profiles
+    WHERE id = auth.uid() AND role = 'main_admin'
   );
 $$;
 
@@ -135,9 +180,54 @@ BEGIN
 END;
 $$;
 
+GRANT EXECUTE ON FUNCTION public.is_admin() TO anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.is_main_admin() TO anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.get_email_for_login(TEXT) TO anon, authenticated;
 
--- 6. Enable Row Level Security (RLS)
+-- ==============================================================================
+-- 6. TRIGGER: STRICT MAIN ADMIN & ROLE INTEGRITY PROTECTION
+-- Prevents any user or admin from demoting or altering the Main Admin.
+-- Only Main Admin can promote or demote other users to/from admin.
+-- ==============================================================================
+CREATE OR REPLACE FUNCTION public.protect_profiles_role()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  -- Prevent modifying or demoting the Main Administrator under any circumstance
+  IF OLD.role = 'main_admin' AND NEW.role <> 'main_admin' THEN
+    RAISE EXCEPTION 'The Main Administrator is protected and cannot be demoted.';
+  END IF;
+
+  -- Prevent assigning main_admin to any other account
+  IF OLD.role <> 'main_admin' AND NEW.role = 'main_admin' THEN
+    RAISE EXCEPTION 'Cannot assign main_admin role. Only one Main Administrator is permitted.';
+  END IF;
+
+  -- If the role is being changed, ensure caller is the Main Admin
+  IF OLD.role IS DISTINCT FROM NEW.role THEN
+    IF NOT public.is_main_admin() THEN
+      RAISE EXCEPTION 'Only the Main Administrator can promote or demote user roles.';
+    END IF;
+  END IF;
+
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_protect_profiles_role ON public.profiles;
+CREATE TRIGGER trg_protect_profiles_role
+  BEFORE UPDATE ON public.profiles
+  FOR EACH ROW EXECUTE FUNCTION public.protect_profiles_role();
+
+-- ==============================================================================
+-- 7. ROW LEVEL SECURITY (RLS) POLICIES
+-- ==============================================================================
+
+-- Enable RLS on all tables
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.models ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.verifications ENABLE ROW LEVEL SECURITY;
@@ -158,7 +248,7 @@ DROP POLICY IF EXISTS "Allow authenticated read verifications" ON public.verific
 DROP POLICY IF EXISTS "Allow authenticated insert verifications" ON public.verifications;
 
 -- (A) PROFILES RLS:
--- Normal users can only view their own profile. Admins can view all profiles.
+-- Normal users can view own profile; Admins & Main Admin can view all profiles
 CREATE POLICY "Users can read own profile or admin read all"
   ON public.profiles
   FOR SELECT
@@ -174,7 +264,7 @@ CREATE POLICY "Allow username lookup for login"
   TO anon
   USING (true);
 
--- Authenticated users can insert their own initial profile on registration
+-- Authenticated users can insert their initial profile (defaults to role = 'user')
 CREATE POLICY "Users can insert own profile"
   ON public.profiles
   FOR INSERT
@@ -183,16 +273,16 @@ CREATE POLICY "Users can insert own profile"
     auth.uid() = id
   );
 
--- Users can update their own profile; Admins can update any profile
+-- Users can update their own profile; Main Admin can update any profile (role protected by trigger)
 CREATE POLICY "Users can update own profile or admin update all"
   ON public.profiles
   FOR UPDATE
   TO authenticated
   USING (
-    auth.uid() = id OR public.is_admin()
+    auth.uid() = id OR public.is_main_admin()
   )
   WITH CHECK (
-    auth.uid() = id OR public.is_admin()
+    auth.uid() = id OR public.is_main_admin()
   );
 
 -- (B) MODELS RLS:
@@ -234,14 +324,26 @@ CREATE POLICY "Allow authenticated insert verifications"
   TO authenticated
   WITH CHECK (true);
 
--- 7. Trigger to automatically populate 'profiles' when a user signs up in Supabase Auth
+-- ==============================================================================
+-- 8. TRIGGER: Automatically populate 'profiles' when a user signs up in Supabase Auth
+-- Every new user automatically receives role = 'user'
+-- ==============================================================================
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public
 AS $$
+DECLARE
+  assigned_role TEXT;
 BEGIN
+  -- Protect Main Admin email: auto-assign 'main_admin' if it matches main admin
+  IF lower(NEW.email) = 'mailtosanjaysp@gmail.com' THEN
+    assigned_role := 'main_admin';
+  ELSE
+    assigned_role := 'user';
+  END IF;
+
   INSERT INTO public.profiles (
     id,
     user_id,
@@ -265,7 +367,7 @@ BEGIN
       split_part(NEW.email, '@', 1)
     ),
     NEW.email,
-    COALESCE(NEW.raw_user_meta_data->>'role', 'user'),
+    assigned_role,
     NEW.raw_user_meta_data->>'college_company',
     NEW.raw_user_meta_data->>'phone',
     NOW()
@@ -285,14 +387,14 @@ CREATE TRIGGER on_auth_user_created
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 
 -- ==============================================================================
--- 8. DEDICATED ADMIN ACCOUNT SETUP & PROFILE SEED
+-- 9. DEDICATED MAIN ADMIN SETUP & PROFILE SEED
 -- ==============================================================================
--- Auto-confirm the admin email in auth.users so no email verification is needed:
+-- Auto-confirm the Main Admin email so no email verification is needed:
 UPDATE auth.users
 SET email_confirmed_at = NOW()
 WHERE email = 'mailtosanjaysp@gmail.com';
 
--- Ensure the admin profile is populated with role = 'admin' and user_id = 'Admin@123'
+-- Ensure the Main Admin profile has role = 'main_admin' and user_id = 'Admin@123'
 INSERT INTO public.profiles (
   id,
   user_id,
@@ -306,21 +408,21 @@ SELECT
   'Admin@123',
   'System Administrator',
   'mailtosanjaysp@gmail.com',
-  'admin',
+  'main_admin',
   NOW()
 FROM auth.users
 WHERE email = 'mailtosanjaysp@gmail.com'
 ON CONFLICT (id) DO UPDATE
 SET
-  role = 'admin',
+  role = 'main_admin',
   user_id = 'Admin@123',
   name = 'System Administrator';
 
 -- ==============================================================================
--- 9. CONFIGURATION INSTRUCTION FOR PURE EMAIL + PASSWORD AUTHENTICATION:
+-- 10. DIRECT ACCESS CONFIGURATION:
 --
--- In your Supabase Dashboard:
--- 1. Go to: Authentication -> Providers -> Email
--- 2. Toggle "Confirm email" to OFF.
---    (This disables email confirmation requirements so users and admins can log in immediately with their password).
+-- With the auto-confirm trigger in Section 0:
+-- - Every newly registered user is automatically confirmed and active.
+-- - No manual approval in Supabase is needed.
+-- - Direct flow: Register -> Account Created -> Login -> Dashboard.
 -- ==============================================================================

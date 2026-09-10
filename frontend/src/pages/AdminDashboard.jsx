@@ -12,12 +12,13 @@ import toast from 'react-hot-toast'
 import GlassCard from '../components/GlassCard'
 import NeonButton from '../components/NeonButton'
 import { getAdminUsers, updateUserRole, getAdminInsights, getAdminAllModels, getAssetUrl } from '../utils/api'
-import { getUser, isAdmin } from '../utils/auth'
+import { getUser, isAdmin, isMainAdmin } from '../utils/auth'
 
 export default function AdminDashboard() {
   const navigate = useNavigate()
   const currentUser = getUser() || {}
   const authorized = isAdmin()
+  const currentIsMainAdmin = isMainAdmin()
 
   const [activeTab, setActiveTab] = useState('users') // 'users' | 'insights' | 'models'
   const [users, setUsers] = useState([])
@@ -64,6 +65,14 @@ export default function AdminDashboard() {
   }
 
   const handleRoleToggle = async (targetUser) => {
+    if (!currentIsMainAdmin) {
+      toast.error('Only the Main Administrator can promote or demote administrators.')
+      return
+    }
+    if (targetUser.role === 'main_admin') {
+      toast.error('The Main Administrator is protected and cannot be modified or demoted.')
+      return
+    }
     if (targetUser.id === currentUser.id) {
       toast.error('You cannot change your own admin role.')
       return
@@ -98,16 +107,18 @@ export default function AdminDashboard() {
       (u.user_id && u.user_id.toLowerCase().includes(term)) ||
       (u.phone && u.phone.toLowerCase().includes(term))
 
+    const uRole = (u.role || 'user').toUpperCase()
     const matchesRole = roleFilter === 'ALL' ||
-      (u.role && u.role.toUpperCase() === roleFilter)
+      (roleFilter === 'ADMIN' ? (uRole === 'ADMIN' || uRole === 'MAIN_ADMIN') : uRole === roleFilter)
 
     return matchesQuery && matchesRole
   })
 
   // Metrics
   const totalCount = users.length
+  const mainAdminCount = users.filter(u => u.role === 'main_admin').length
   const adminCount = users.filter(u => u.role === 'admin').length
-  const userCount = users.filter(u => u.role !== 'admin').length
+  const userCount = users.filter(u => u.role !== 'admin' && u.role !== 'main_admin').length
 
   // If user is not an admin, render sleek Access Denied view
   if (!authorized) {
@@ -253,7 +264,7 @@ export default function AdminDashboard() {
                   <ShieldCheck size={18} style={{ color: '#22c55e' }} />
                 </div>
                 <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: '1.8rem', fontWeight: 800, color: '#22c55e' }}>
-                  {loading ? '...' : adminCount}
+                  {loading ? '...' : (mainAdminCount + adminCount)}
                 </div>
               </GlassCard>
 
@@ -343,6 +354,7 @@ export default function AdminDashboard() {
                           .toUpperCase()
 
                         const photoSrc = getAssetUrl(u.profile_photo)
+                        const isRowMainAdmin = u.role === 'main_admin'
                         const isRowAdmin = u.role === 'admin'
                         const isSelf = u.id === currentUser.id
 
@@ -406,14 +418,29 @@ export default function AdminDashboard() {
 
                             {/* Role */}
                             <td style={{ padding: '14px 16px' }}>
-                              <span style={{
-                                padding: '3px 9px', borderRadius: 8, fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase',
-                                background: isRowAdmin ? 'rgba(34,197,94,0.12)' : 'rgba(0,229,255,0.08)',
-                                color: isRowAdmin ? '#22c55e' : '#00e5ff',
-                                border: `1px solid ${isRowAdmin ? 'rgba(34,197,94,0.3)' : 'rgba(0,229,255,0.2)'}`
-                              }}>
-                                {u.role || 'user'}
-                              </span>
+                              {isRowMainAdmin ? (
+                                <span style={{
+                                  padding: '3px 10px', borderRadius: 8, fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase',
+                                  background: 'rgba(168,85,247,0.15)', color: '#c084fc', border: '1px solid rgba(168,85,247,0.4)',
+                                  display: 'inline-flex', alignItems: 'center', gap: 4
+                                }}>
+                                  <ShieldCheck size={11} /> Main Admin
+                                </span>
+                              ) : isRowAdmin ? (
+                                <span style={{
+                                  padding: '3px 9px', borderRadius: 8, fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase',
+                                  background: 'rgba(34,197,94,0.12)', color: '#22c55e', border: '1px solid rgba(34,197,94,0.3)'
+                                }}>
+                                  Admin
+                                </span>
+                              ) : (
+                                <span style={{
+                                  padding: '3px 9px', borderRadius: 8, fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase',
+                                  background: 'rgba(0,229,255,0.08)', color: '#00e5ff', border: '1px solid rgba(0,229,255,0.2)'
+                                }}>
+                                  User
+                                </span>
+                              )}
                             </td>
 
                             {/* Organization */}
@@ -428,21 +455,36 @@ export default function AdminDashboard() {
 
                             {/* Action: Manage Role */}
                             <td style={{ padding: '14px 20px', textAlign: 'right' }}>
-                              {!isSelf ? (
-                                <button
-                                  disabled={updatingId === u.id}
-                                  onClick={() => handleRoleToggle(u)}
-                                  style={{
-                                    padding: '5px 12px', borderRadius: 8, fontSize: '0.72rem', fontWeight: 600, cursor: updatingId === u.id ? 'not-allowed' : 'pointer',
-                                    border: isRowAdmin ? '1px solid rgba(244,63,94,0.3)' : '1px solid rgba(34,197,94,0.3)',
-                                    background: isRowAdmin ? 'rgba(244,63,94,0.08)' : 'rgba(34,197,94,0.08)',
-                                    color: isRowAdmin ? '#f43f5e' : '#22c55e',
-                                  }}
-                                >
-                                  {updatingId === u.id ? 'Saving...' : isRowAdmin ? 'Demote to User' : 'Promote to Admin'}
-                                </button>
+                              {isRowMainAdmin ? (
+                                <span style={{
+                                  display: 'inline-flex', alignItems: 'center', gap: 4,
+                                  padding: '4px 10px', borderRadius: 8, fontSize: '0.72rem', fontWeight: 700,
+                                  background: 'rgba(168,85,247,0.08)', color: '#c084fc', border: '1px solid rgba(168,85,247,0.25)'
+                                }}>
+                                  <ShieldCheck size={12} /> Protected
+                                </span>
+                              ) : currentIsMainAdmin ? (
+                                !isSelf ? (
+                                  <button
+                                    disabled={updatingId === u.id}
+                                    onClick={() => handleRoleToggle(u)}
+                                    style={{
+                                      padding: '5px 12px', borderRadius: 8, fontSize: '0.72rem', fontWeight: 600, cursor: updatingId === u.id ? 'not-allowed' : 'pointer',
+                                      border: isRowAdmin ? '1px solid rgba(244,63,94,0.3)' : '1px solid rgba(34,197,94,0.3)',
+                                      background: isRowAdmin ? 'rgba(244,63,94,0.08)' : 'rgba(34,197,94,0.08)',
+                                      color: isRowAdmin ? '#f43f5e' : '#22c55e',
+                                      transition: 'all 0.2s',
+                                    }}
+                                  >
+                                    {updatingId === u.id ? 'Saving...' : isRowAdmin ? 'Demote to User' : 'Promote to Admin'}
+                                  </button>
+                                ) : (
+                                  <span style={{ color: '#6b7a8d', fontSize: '0.72rem' }}>You (Main Admin)</span>
+                                )
                               ) : (
-                                <span style={{ color: '#4a5568', fontSize: '0.72rem' }}>Current Admin</span>
+                                <span style={{ color: '#4a5568', fontSize: '0.72rem' }}>
+                                  {isSelf ? 'You (Admin)' : 'Main Admin Managed'}
+                                </span>
                               )}
                             </td>
                           </tr>

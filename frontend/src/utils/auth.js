@@ -98,7 +98,12 @@ export function isLoggedIn() {
 
 export function isAdmin() {
   const user = getUser()
-  return user?.role === 'admin'
+  return user?.role === 'admin' || user?.role === 'main_admin'
+}
+
+export function isMainAdmin() {
+  const user = getUser()
+  return user?.role === 'main_admin'
 }
 
 /**

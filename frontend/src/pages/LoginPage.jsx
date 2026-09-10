@@ -138,7 +138,7 @@ export default function LoginPage() {
     document.title = 'Login – CADShield'
     if (isLoggedIn()) {
       const u = getUser()
-      if (u?.role === 'admin') navigate('/admin', { replace: true })
+      if (u?.role === 'admin' || u?.role === 'main_admin') navigate('/admin', { replace: true })
       else navigate('/dashboard', { replace: true })
     }
   }, [navigate])
@@ -177,7 +177,7 @@ export default function LoginPage() {
       if (mode === 'login') {
         const res = await login(email.trim(), password)
         toast.success('Welcome back!')
-        if (res?.user?.role === 'admin') {
+        if (res?.user?.role === 'admin' || res?.user?.role === 'main_admin') {
           navigate('/admin')
         } else {
           navigate('/dashboard')
