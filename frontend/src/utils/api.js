@@ -61,7 +61,7 @@ function formatAuthError(err) {
     return 'Invalid or expired 6-digit verification code. Please check the code or request a new one.'
   }
   if (msg.includes('rate limit') || msg.includes('over_email_send_rate_limit') || msg.includes('Too many requests')) {
-    return 'Email rate limit exceeded. Please wait a few minutes before requesting another OTP.'
+    return 'Email rate limit reached. Supabase default mailer is limited to 3 emails/hr. Please wait a few minutes, or enable Custom SMTP in Supabase Project Settings.'
   }
   if (msg.includes('User already registered') || msg.includes('already exists')) {
     return 'An account with this email address already exists. Please sign in instead.'

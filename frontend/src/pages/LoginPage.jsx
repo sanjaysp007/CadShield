@@ -8,7 +8,7 @@ import {
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { login, signup, verifySignupOtp, verifyRecoveryOtp } from '../utils/api'
-import { isLoggedIn, clearAuth } from '../utils/auth'
+import { isLoggedIn, clearAuth, getUser } from '../utils/auth'
 import { supabase } from '../utils/supabase'
 
 /* ── Floating Orbs Background ──────────────────────── */
@@ -207,8 +207,20 @@ export default function LoginPage() {
   const [newPassword, setNewPassword] = useState('')
   const [errors,      setErrors]      = useState({})
 
-  // OTP resend countdown
-  const [resendCooldown, setResendCooldown] = useState(0)
+  // OTP resend countdown (persisted across refresh via sessionStorage)
+  const getStoredCooldown = () => {
+    if (typeof window === 'undefined') return 0
+    const until = Number(sessionStorage.getItem('cadshield_resend_until') || 0)
+    const diff = Math.ceil((until - Date.now()) / 1000)
+    return diff > 0 ? diff : 0
+  }
+  const [resendCooldown, setResendCooldown] = useState(getStoredCooldown)
+
+  const startCooldown = (secs = 60) => {
+    const until = Date.now() + secs * 1000
+    sessionStorage.setItem('cadshield_resend_until', String(until))
+    setResendCooldown(secs)
+  }
 
   // Anti-duplicate synchronous request guard
   const isActionInFlightRef = useRef(false)
@@ -226,8 +238,19 @@ export default function LoginPage() {
 
   // Countdown timer for resending OTP
   useEffect(() => {
-    if (resendCooldown <= 0) return
-    const timer = setInterval(() => setResendCooldown(c => (c <= 1 ? 0 : c - 1)), 1000)
+    if (resendCooldown <= 0) {
+      sessionStorage.removeItem('cadshield_resend_until')
+      return
+    }
+    const timer = setInterval(() => {
+      setResendCooldown(c => {
+        if (c <= 1) {
+          sessionStorage.removeItem('cadshield_resend_until')
+          return 0
+        }
+        return c - 1
+      })
+    }, 1000)
     return () => clearInterval(timer)
   }, [resendCooldown])
 
@@ -260,7 +283,7 @@ export default function LoginPage() {
   const handleAuthSubmit = async (e) => {
     e.preventDefault()
     if (!validate()) return
-    if (isActionInFlightRef.current) return
+    if (loading || isActionInFlightRef.current) return
     isActionInFlightRef.current = true
     setLoading(true)
 
@@ -285,7 +308,7 @@ export default function LoginPage() {
           toast.success('6-digit verification code sent to your email!')
           setMode('otp')
           setOtp('')
-          setResendCooldown(60)
+          startCooldown(60)
         } else {
           toast.success('Account created successfully!')
           setNewOwner(res.owner_id)
@@ -341,7 +364,7 @@ export default function LoginPage() {
   const handleForgotSubmit = async (e) => {
     e.preventDefault()
     if (!validate()) return
-    if (isActionInFlightRef.current) return
+    if (loading || isActionInFlightRef.current) return
     isActionInFlightRef.current = true
     setLoading(true)
 
@@ -355,7 +378,7 @@ export default function LoginPage() {
       toast.success('6-digit reset code sent to your email!')
       setMode('forgot-otp')
       setOtp('')
-      setResendCooldown(60)
+      startCooldown(60)
     } catch (err) {
       toast.error(err?.message || 'Could not send reset code. Please check your email.')
     } finally {
@@ -378,7 +401,7 @@ export default function LoginPage() {
       return
     }
 
-    if (isActionInFlightRef.current) return
+    if (loading || isActionInFlightRef.current) return
     isActionInFlightRef.current = true
     setLoading(true)
     setErrors({})
@@ -401,7 +424,7 @@ export default function LoginPage() {
   const handleResetPassword = async (e) => {
     e.preventDefault()
     if (!validate()) return
-    if (isActionInFlightRef.current) return
+    if (loading || isActionInFlightRef.current) return
     isActionInFlightRef.current = true
     setLoading(true)
 
@@ -426,9 +449,9 @@ export default function LoginPage() {
 
   // Resend OTP (Strictly single-request guarded with 60-second cooldown)
   const handleResendOtp = async (type) => {
-    if (resendCooldown > 0 || isActionInFlightRef.current) return
+    if (resendCooldown > 0 || isActionInFlightRef.current || loading) return
     isActionInFlightRef.current = true
-    setResendCooldown(60) // Immediately lock button
+    startCooldown(60) // Immediately lock button & persist cooldown
     setLoading(true)
 
     const targetEmail = (email || pendingEmailRef.current || sessionStorage.getItem('cadshield_pending_email') || '').trim().toLowerCase()
@@ -525,11 +548,11 @@ export default function LoginPage() {
                   <OtpInput value={otp} onChange={setOtp} disabled={loading} />
                   {errors.otp && <p style={{ color: '#f43f5e', fontSize: '0.75rem', textAlign: 'center', marginBottom: 12 }}>{errors.otp}</p>}
 
-                  <button type="submit" disabled={loading || (otp || '').replace(/\D/g, '').length < 6} style={{
+                  <button type="submit" disabled={loading || isActionInFlightRef.current || (otp || '').replace(/\D/g, '').length < 6} style={{
                     width: '100%', padding: '14px', borderRadius: 14, marginTop: 12,
                     fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: '0.95rem',
-                    cursor: (loading || (otp || '').replace(/\D/g, '').length < 6) ? 'not-allowed' : 'pointer',
-                    opacity: (loading || (otp || '').replace(/\D/g, '').length < 6) ? 0.7 : 1,
+                    cursor: (loading || isActionInFlightRef.current || (otp || '').replace(/\D/g, '').length < 6) ? 'not-allowed' : 'pointer',
+                    opacity: (loading || isActionInFlightRef.current || (otp || '').replace(/\D/g, '').length < 6) ? 0.7 : 1,
                     background: 'linear-gradient(135deg, #00e5ff, #8b5cf6)', color: '#04060f', border: 'none',
                     display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
                     boxShadow: '0 0 24px rgba(0,229,255,0.2)',
@@ -544,11 +567,11 @@ export default function LoginPage() {
                   ) : (
                     <button
                       type="button"
-                      disabled={resendCooldown > 0 || loading}
+                      disabled={resendCooldown > 0 || loading || isActionInFlightRef.current}
                       onClick={() => handleResendOtp('signup')}
                       style={{
-                        background: 'none', border: 'none', color: loading ? '#4a5568' : '#00e5ff',
-                        cursor: loading ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4, fontWeight: 600
+                        background: 'none', border: 'none', color: (loading || isActionInFlightRef.current) ? '#4a5568' : '#00e5ff',
+                        cursor: (loading || isActionInFlightRef.current) ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4, fontWeight: 600
                       }}
                     >
                       <RefreshCw size={12} /> Resend OTP
@@ -577,15 +600,16 @@ export default function LoginPage() {
                 <form onSubmit={handleForgotSubmit}>
                   <AuthField id="email" label="Email Address" type="email" value={email} onChange={v => { setEmail(v); setErrors(p=>({...p,email:''})) }} placeholder="you@example.com" icon={Mail} error={errors.email} autoComplete="email" />
 
-                  <button type="submit" disabled={loading} style={{
+                  <button type="submit" disabled={loading || isActionInFlightRef.current} style={{
                     width: '100%', padding: '14px', borderRadius: 14, marginTop: 8,
                     fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: '0.95rem',
-                    cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.7 : 1,
+                    cursor: (loading || isActionInFlightRef.current) ? 'not-allowed' : 'pointer',
+                    opacity: (loading || isActionInFlightRef.current) ? 0.7 : 1,
                     background: 'linear-gradient(135deg, #00e5ff, #8b5cf6)', color: '#04060f', border: 'none',
                     display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
                     boxShadow: '0 0 24px rgba(0,229,255,0.2)',
                   }}>
-                    {loading ? 'Sending Code...' : <><Mail size={16} /> Send Reset Code</>}
+                    {loading ? 'Sending OTP...' : <><Mail size={16} /> Send OTP</>}
                   </button>
                 </form>
 
@@ -614,11 +638,11 @@ export default function LoginPage() {
                   <OtpInput value={otp} onChange={setOtp} disabled={loading} />
                   {errors.otp && <p style={{ color: '#f43f5e', fontSize: '0.75rem', textAlign: 'center', marginBottom: 12 }}>{errors.otp}</p>}
 
-                  <button type="submit" disabled={loading || (otp || '').replace(/\D/g, '').length < 6} style={{
+                  <button type="submit" disabled={loading || isActionInFlightRef.current || (otp || '').replace(/\D/g, '').length < 6} style={{
                     width: '100%', padding: '14px', borderRadius: 14, marginTop: 12,
                     fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: '0.95rem',
-                    cursor: (loading || (otp || '').replace(/\D/g, '').length < 6) ? 'not-allowed' : 'pointer',
-                    opacity: (loading || (otp || '').replace(/\D/g, '').length < 6) ? 0.7 : 1,
+                    cursor: (loading || isActionInFlightRef.current || (otp || '').replace(/\D/g, '').length < 6) ? 'not-allowed' : 'pointer',
+                    opacity: (loading || isActionInFlightRef.current || (otp || '').replace(/\D/g, '').length < 6) ? 0.7 : 1,
                     background: 'linear-gradient(135deg, #00e5ff, #8b5cf6)', color: '#04060f', border: 'none',
                     display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
                     boxShadow: '0 0 24px rgba(0,229,255,0.2)',
@@ -725,18 +749,19 @@ export default function LoginPage() {
                     </div>
                   )}
 
-                  <button type="submit" disabled={loading} style={{
+                  <button type="submit" disabled={loading || isActionInFlightRef.current} style={{
                     width: '100%', padding: '14px', borderRadius: 14, marginTop: 4,
                     fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: '0.95rem',
-                    cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.7 : 1,
+                    cursor: (loading || isActionInFlightRef.current) ? 'not-allowed' : 'pointer',
+                    opacity: (loading || isActionInFlightRef.current) ? 0.7 : 1,
                     background: 'linear-gradient(135deg, #00e5ff, #8b5cf6)', color: '#04060f', border: 'none',
                     display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
                     boxShadow: '0 0 24px rgba(0,229,255,0.2)', transition: 'all 0.2s',
                   }}>
                     {loading ? (
-                      <><motion.div animate={{ rotate: 360 }} transition={{ duration: 0.8, repeat: Infinity, ease: 'linear' }}><Shield size={16} /></motion.div> {mode==='login'?'Signing in…':'Creating account…'}</>
+                      <><motion.div animate={{ rotate: 360 }} transition={{ duration: 0.8, repeat: Infinity, ease: 'linear' }}><Shield size={16} /></motion.div> {mode === 'login' ? 'Signing in…' : 'Sending OTP…'}</>
                     ) : (
-                      <>{mode==='login' ? <LogIn size={16}/> : <Sparkles size={16}/>} {mode==='login'?'Sign In':'Create Account'}</>
+                      <>{mode === 'login' ? <LogIn size={16}/> : <Mail size={16}/>} {mode === 'login' ? 'Sign In' : 'Send OTP'}</>
                     )}
                   </button>
                 </form>
