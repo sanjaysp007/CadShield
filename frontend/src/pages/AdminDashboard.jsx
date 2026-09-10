@@ -169,12 +169,12 @@ export default function AdminDashboard() {
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: '#04060f', paddingTop: 96, paddingBottom: 64, position: 'relative' }}>
-      <div style={{ maxWidth: 1280, margin: '0 auto', padding: '0 24px' }}>
+    <div style={{ minHeight: '100vh', background: '#04060f', paddingTop: 88, paddingBottom: 64, position: 'relative' }}>
+      <div style={{ maxWidth: 1280, margin: '0 auto', padding: '0 16px' }} className="px-3 sm:px-6">
 
         {/* Top Header */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16, marginBottom: 32 }}>
-          <div>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16, marginBottom: 28 }}>
+          <div style={{ maxWidth: 720 }}>
             <div style={{
               display: 'inline-flex', alignItems: 'center', gap: 6,
               padding: '4px 10px', borderRadius: 99,
@@ -184,10 +184,10 @@ export default function AdminDashboard() {
             }}>
               <ShieldCheck size={13} /> Authorized Administration
             </div>
-            <h1 style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: '2rem', fontWeight: 800, color: '#f0f4ff', letterSpacing: '-0.02em', marginBottom: 4 }}>
+            <h1 style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 'clamp(1.5rem, 4vw, 2.2rem)', fontWeight: 800, color: '#f0f4ff', letterSpacing: '-0.02em', marginBottom: 4 }}>
               Admin <span style={{ background: 'linear-gradient(135deg, #00e5ff, #8b5cf6)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>Dashboard</span>
             </h1>
-            <p style={{ color: '#6b7a8d', fontSize: '0.88rem' }}>
+            <p style={{ color: '#6b7a8d', fontSize: '0.86rem', lineHeight: 1.5 }}>
               Full administrative view into registered users, authentic database statistics, and registered CADShield projects.
             </p>
           </div>
@@ -197,9 +197,10 @@ export default function AdminDashboard() {
               onClick={() => { setRefreshing(true); loadAllData() }}
               style={{
                 display: 'flex', alignItems: 'center', gap: 6,
-                padding: '10px 16px', borderRadius: 12,
+                padding: '9px 16px', borderRadius: 12,
                 background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)',
                 color: '#8892a4', fontSize: '0.82rem', cursor: 'pointer',
+                transition: 'all 0.2s',
               }}
             >
               <RefreshCw size={14} style={{ animation: refreshing ? 'rotate-slow 1s linear infinite' : 'none' }} />
@@ -209,7 +210,12 @@ export default function AdminDashboard() {
         </div>
 
         {/* Navigation Tabs */}
-        <div style={{ display: 'flex', gap: 8, marginBottom: 24, borderBottom: '1px solid rgba(255,255,255,0.06)', paddingBottom: 12 }}>
+        <div style={{
+          display: 'flex', gap: 8, marginBottom: 24,
+          borderBottom: '1px solid rgba(255,255,255,0.06)', paddingBottom: 12,
+          overflowX: 'auto', WebkitOverflowScrolling: 'touch',
+          scrollbarWidth: 'none', msOverflowStyle: 'none'
+        }}>
           {[
             { id: 'users', label: `Users (${users.length})`, icon: Users },
             { id: 'insights', label: 'Platform Insights', icon: Activity },
@@ -224,7 +230,8 @@ export default function AdminDashboard() {
                 style={{
                   display: 'inline-flex', alignItems: 'center', gap: 8,
                   padding: '10px 18px', borderRadius: 12, border: 'none', cursor: 'pointer',
-                  fontWeight: 650, fontSize: '0.85rem', transition: 'all 0.2s',
+                  fontWeight: 650, fontSize: '0.85rem', transition: 'all 0.2s', flexShrink: 0,
+                  whiteSpace: 'nowrap',
                   background: active ? 'rgba(0,229,255,0.12)' : 'rgba(255,255,255,0.02)',
                   color: active ? '#00e5ff' : '#6b7a8d',
                   boxShadow: active ? 'inset 0 0 0 1px rgba(0,229,255,0.3)' : 'none',
@@ -240,7 +247,7 @@ export default function AdminDashboard() {
         {activeTab === 'users' && (
           <div>
             {/* Stat Cards */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginBottom: 24 }} className="grid grid-cols-1 sm:grid-cols-3">
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16, marginBottom: 24 }}>
               <GlassCard style={{ padding: '20px 24px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
                   <span style={{ fontSize: '0.75rem', color: '#6b7a8d', textTransform: 'uppercase', fontWeight: 600 }}>Total Registered Users</span>
@@ -273,8 +280,8 @@ export default function AdminDashboard() {
             </div>
 
             {/* Search & Filter Bar */}
-            <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
-              <div style={{ position: 'relative', flex: 1, minWidth: 260 }}>
+            <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap', alignItems: 'center' }}>
+              <div style={{ position: 'relative', flex: 1, minWidth: 220, width: '100%' }}>
                 <Search size={16} style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: '#4a5568' }} />
                 <input
                   type="text"
@@ -291,7 +298,7 @@ export default function AdminDashboard() {
                 />
               </div>
 
-              <div style={{ display: 'flex', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 12, padding: 3 }}>
+              <div style={{ display: 'flex', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 12, padding: 3, flexShrink: 0 }}>
                 {['ALL', 'ADMIN', 'USER'].map(st => (
                   <button
                     key={st}
@@ -324,8 +331,8 @@ export default function AdminDashboard() {
                   <div style={{ fontSize: '0.82rem' }}>No user matches the filter criteria or no profiles exist yet.</div>
                 </div>
               ) : (
-                <div style={{ overflowX: 'auto' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.84rem' }}>
+                <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+                  <table style={{ width: '100%', minWidth: 720, borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.84rem' }}>
                     <thead>
                       <tr style={{ background: 'rgba(255,255,255,0.02)', borderBottom: '1px solid rgba(255,255,255,0.06)', color: '#6b7a8d', fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                         <th style={{ padding: '14px 20px' }}>User</th>
@@ -494,7 +501,7 @@ export default function AdminDashboard() {
         {/* ── TAB 2: REAL APPLICATION INSIGHTS ────────────────── */}
         {activeTab === 'insights' && (
           <div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 24 }} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16, marginBottom: 24 }}>
               <GlassCard style={{ padding: '20px 22px' }}>
                 <div style={{ fontSize: '0.72rem', color: '#6b7a8d', textTransform: 'uppercase', fontWeight: 600, marginBottom: 6 }}>
                   Total Platform Users
@@ -551,7 +558,7 @@ export default function AdminDashboard() {
               <p style={{ color: '#8892a4', fontSize: '0.85rem', marginBottom: 20 }}>
                 These metrics reflect actual records stored in Supabase with Row Level Security.
               </p>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16 }} className="grid grid-cols-1 sm:grid-cols-2">
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 16 }}>
                 <div style={{ padding: '16px 20px', borderRadius: 14, background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}>
                   <div style={{ color: '#6b7a8d', fontSize: '0.75rem', fontWeight: 600, textTransform: 'uppercase', marginBottom: 6 }}>Average Model Integrity</div>
                   <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: '1.6rem', fontWeight: 800, color: '#00e5ff' }}>
@@ -590,8 +597,8 @@ export default function AdminDashboard() {
                 <div style={{ fontSize: '0.82rem' }}>When users upload or watermark 3D models, they will appear here in real time.</div>
               </div>
             ) : (
-              <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.84rem' }}>
+              <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+                <table style={{ width: '100%', minWidth: 640, borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.84rem' }}>
                   <thead>
                     <tr style={{ background: 'rgba(255,255,255,0.02)', borderBottom: '1px solid rgba(255,255,255,0.06)', color: '#6b7a8d', fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                       <th style={{ padding: '14px 20px' }}>Model / File Name</th>

@@ -139,7 +139,6 @@ export default function Dashboard() {
   const [refreshing, setRefreshing] = useState(false)
   const [lineData, setLineData] = useState(() => buildLineData([]))
   const [user, setUser] = useState(() => getUser() || {})
-  const [menuOpen, setMenuOpen] = useState(false)
   const [copied, setCopied] = useState(false)
 
   // Listen to profile updates
@@ -267,100 +266,6 @@ export default function Dashboard() {
                 <RefreshCw size={13} style={{ animation: refreshing ? 'rotate-slow 1s linear infinite' : 'none' }} />
                 Refresh
               </button>
-
-              {/* Profile Menu Dropdown Button */}
-              <div style={{ position: 'relative' }}>
-                <button
-                  onClick={() => setMenuOpen(v => !v)}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: 10,
-                    padding: '6px 14px 6px 8px', borderRadius: 14,
-                    background: 'rgba(255,255,255,0.04)',
-                    border: '1px solid rgba(0,229,255,0.25)',
-                    cursor: 'pointer', boxShadow: '0 0 16px rgba(0,229,255,0.1)',
-                  }}
-                >
-                  <div style={{
-                    width: 32, height: 32, borderRadius: '50%',
-                    overflow: 'hidden', border: '1px solid rgba(0,229,255,0.4)',
-                    background: 'linear-gradient(135deg, rgba(0,229,255,0.2), rgba(139,92,246,0.2))',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  }}>
-                    {photoSrc ? (
-                      <img src={photoSrc} alt={user.full_name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                    ) : (
-                      <span style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: '0.85rem', fontWeight: 800, color: '#00e5ff' }}>
-                        {initials}
-                      </span>
-                    )}
-                  </div>
-                  <div style={{ textAlign: 'left' }}>
-                    <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#f0f4ff', lineHeight: 1.2 }}>
-                      {user.full_name?.split(' ')[0] || 'Account'}
-                    </div>
-                    <div style={{ fontSize: '0.68rem', color: '#00e5ff', fontFamily: 'monospace', lineHeight: 1.2 }}>
-                      {user.user_id || user.owner_id}
-                    </div>
-                  </div>
-                  <ChevronDown size={14} style={{ color: '#6b7a8d', transform: menuOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
-                </button>
-
-                {/* Dropdown Menu */}
-                <AnimatePresence>
-                  {menuOpen && (
-                    <motion.div
-                      initial={{ opacity: 0, y: 8, scale: 0.95 }}
-                      animate={{ opacity: 1, y: 0, scale: 1 }}
-                      exit={{ opacity: 0, y: 8, scale: 0.95 }}
-                      style={{
-                        position: 'absolute', right: 0, top: 'calc(100% + 8px)',
-                        width: 220, zIndex: 100,
-                        background: 'rgba(11,15,30,0.98)', border: '1px solid rgba(255,255,255,0.08)',
-                        borderRadius: 16, padding: '8px', backdropFilter: 'blur(20px)',
-                        boxShadow: '0 20px 50px rgba(0,0,0,0.5)',
-                      }}
-                    >
-                      <Link to="/profile" onClick={() => setMenuOpen(false)} style={{ textDecoration: 'none' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 10, color: '#f0f4ff', fontSize: '0.82rem', cursor: 'pointer', transition: 'background 0.2s' }}
-                             onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,229,255,0.08)'}
-                             onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                          <User size={15} style={{ color: '#00e5ff' }} /> Profile
-                        </div>
-                      </Link>
-
-                      <Link to="/my-projects" onClick={() => setMenuOpen(false)} style={{ textDecoration: 'none' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 10, color: '#f0f4ff', fontSize: '0.82rem', cursor: 'pointer', transition: 'background 0.2s' }}
-                             onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,229,255,0.08)'}
-                             onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                          <FolderLock size={15} style={{ color: '#a78bfa' }} /> My Projects
-                        </div>
-                      </Link>
-
-                      <Link to="/profile" onClick={() => setMenuOpen(false)} style={{ textDecoration: 'none' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 10, color: '#f0f4ff', fontSize: '0.82rem', cursor: 'pointer', transition: 'background 0.2s' }}
-                             onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,229,255,0.08)'}
-                             onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                          <Settings size={15} style={{ color: '#f59e0b' }} /> Settings
-                        </div>
-                      </Link>
-
-                      <div style={{ height: 1, background: 'rgba(255,255,255,0.06)', margin: '6px 0' }} />
-
-                      <button
-                        onClick={logout}
-                        style={{
-                          width: '100%', display: 'flex', alignItems: 'center', gap: 10,
-                          padding: '10px 12px', borderRadius: 10, border: 'none',
-                          background: 'rgba(244,63,94,0.08)', color: '#f43f5e',
-                          fontSize: '0.82rem', fontWeight: 600, cursor: 'pointer',
-                        }}
-                      >
-                        <LogOut size={15} /> Logout
-                      </button>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
 
             </div>
           </div>

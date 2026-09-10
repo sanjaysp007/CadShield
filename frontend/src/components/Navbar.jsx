@@ -69,7 +69,7 @@ function UserMenu({ user }) {
           )}
         </div>
 
-        <div style={{ textAlign: 'left' }}>
+        <div style={{ textAlign: 'left' }} className="hidden sm:block">
           <div style={{ fontSize: '0.8rem', fontWeight: 600, color: '#f0f4ff', lineHeight: 1.2 }}>
             {user.full_name?.split(' ')[0] || 'User'}
           </div>
@@ -88,7 +88,7 @@ function UserMenu({ user }) {
             exit={{ opacity: 0, y: 8, scale: 0.95 }}
             onClick={e => e.stopPropagation()}
             style={{
-              position: 'absolute', right: 0, top: 'calc(100% + 8px)', width: 250, zIndex: 200,
+              position: 'absolute', right: 0, top: 'calc(100% + 8px)', width: 250, maxWidth: 'calc(100vw - 24px)', zIndex: 200,
               background: 'rgba(11,15,30,0.98)', border: '1px solid rgba(255,255,255,0.08)',
               borderRadius: 16, padding: '12px', backdropFilter: 'blur(20px)',
               boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
@@ -218,7 +218,7 @@ export default function Navbar() {
             </Link>
 
             {/* Desktop Navigation */}
-            <div className="hidden md:flex" style={{ display: 'none', alignItems: 'center', gap: 2, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 14, padding: '4px 6px' }}>
+            <div className="hidden md:flex items-center" style={{ gap: 2, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 14, padding: '4px 6px' }}>
               {navItems.map(({ to, label, icon: Icon }) => {
                 const active = pathname === to || (label === 'Dashboard' && (pathname === '/dashboard' || pathname === '/admin'))
                 return (
