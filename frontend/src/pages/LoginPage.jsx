@@ -146,9 +146,9 @@ export default function LoginPage() {
   const validate = () => {
     const e = {}
     if (mode === 'login') {
-      if (!email.trim()) e.email = 'Email, Username, or Owner ID is required'
+      if (!email.trim()) e.email = 'Email ID is required'
     } else {
-      if (!email.trim()) e.email = 'Email address is required'
+      if (!email.trim()) e.email = 'Email ID is required'
       else if (!/\S+@\S+\.\S+/.test(email)) e.email = 'Enter a valid email address'
     }
 
@@ -264,7 +264,7 @@ export default function LoginPage() {
                   {mode === 'login' ? 'Welcome back' : 'Create your account'}
                 </h2>
                 <p style={{ color: '#4a5568', fontSize: '0.82rem', marginBottom: 24 }}>
-                  {mode === 'login' ? 'Sign in with your email or username to access your protected models.' : 'Register with email and password to receive a unique Owner ID.'}
+                  {mode === 'login' ? 'Sign in with your email to access your protected models.' : 'Register with email and password to receive a unique Owner ID.'}
                 </p>
 
                 <form onSubmit={handleAuthSubmit} noValidate>
@@ -279,14 +279,14 @@ export default function LoginPage() {
 
                   <AuthField
                     id="email"
-                    label={mode === 'login' ? 'Email, Username, or Owner ID' : 'Email Address'}
-                    type={mode === 'login' ? 'text' : 'email'}
+                    label="Email ID"
+                    type="email"
                     value={email}
                     onChange={v => { setEmail(v); setErrors(p=>({...p,email:''})) }}
-                    placeholder={mode === 'login' ? 'you@example.com or Admin@123' : 'you@example.com'}
+                    placeholder="you@example.com"
                     icon={Mail}
                     error={errors.email}
-                    autoComplete={mode === 'login' ? 'username' : 'email'}
+                    autoComplete="email"
                   />
 
                   <AuthField

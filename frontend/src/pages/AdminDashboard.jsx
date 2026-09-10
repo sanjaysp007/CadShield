@@ -172,13 +172,6 @@ export default function AdminDashboard() {
     <div style={{ minHeight: '100vh', background: '#04060f', paddingTop: 96, paddingBottom: 64, position: 'relative' }}>
       <div style={{ maxWidth: 1280, margin: '0 auto', padding: '0 24px' }}>
 
-        {/* Back navigation */}
-        <div style={{ marginBottom: 20 }}>
-          <Link to="/dashboard" style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 8, color: '#6b7a8d', fontSize: '0.85rem' }}>
-            <ArrowLeft size={16} /> Back to Dashboard
-          </Link>
-        </div>
-
         {/* Top Header */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16, marginBottom: 32 }}>
           <div>

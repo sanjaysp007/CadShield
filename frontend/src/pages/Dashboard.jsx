@@ -344,16 +344,6 @@ export default function Dashboard() {
                         </div>
                       </Link>
 
-                      {user.role === 'admin' && (
-                        <Link to="/admin" onClick={() => setMenuOpen(false)} style={{ textDecoration: 'none' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 10, color: '#22c55e', fontSize: '0.82rem', cursor: 'pointer', transition: 'background 0.2s', background: 'rgba(34,197,94,0.06)' }}
-                               onMouseEnter={e => e.currentTarget.style.background = 'rgba(34,197,94,0.12)'}
-                               onMouseLeave={e => e.currentTarget.style.background = 'rgba(34,197,94,0.06)'}>
-                            <ShieldAlert size={15} style={{ color: '#22c55e' }} /> Admin Dashboard
-                          </div>
-                        </Link>
-                      )}
-
                       <div style={{ height: 1, background: 'rgba(255,255,255,0.06)', margin: '6px 0' }} />
 
                       <button
